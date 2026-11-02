@@ -187,7 +187,8 @@ export async function storeForm(id) {
         e.preventDefault();
         const body = { ...readForm(f), ...(cnpjData || {}) };
         body.cnpj = body.cnpj.replace(/\D/g, '');
-        try { const r = s ? await put('/api/stores/' + s.id, body) : await post('/api/stores', body); toast('Loja salva.', 'ok'); location.hash = '#/lojas/' + r.id; } catch (er) { showErr(er); }
+        const btn = f.querySelector('button.primary'); if (btn.disabled) return; btn.disabled = true; btn.textContent = 'Salvando…';
+        try { const r = s ? await put('/api/stores/' + s.id, body) : await post('/api/stores', body); toast('Loja salva.', 'ok'); location.hash = '#/lojas/' + r.id; } catch (er) { showErr(er); btn.disabled = false; btn.textContent = 'Salvar loja'; }
       };
       const sl = root.querySelector('#sendLink'); if (sl) sl.onclick = () => linkModal(s.id);
       const ds = root.querySelector('#delStore'); if (ds) ds.onclick = () => deleteStore(s, () => (location.hash = '#/lojas'));

@@ -171,6 +171,16 @@ async function upsertStore(req, body, existing) {
   if (!body.brand_id) throw err(400, 'Selecione a marca da loja.');
   const dup = one('SELECT id FROM stores WHERE cnpj=? AND deleted_at IS NULL', cnpj);
   if (dup && (!existing || dup.id !== existing.id)) throw err(409, 'Já existe uma loja com este CNPJ.');
+  // CNPJ de uma loja excluída: reaproveita o cadastro (restaura e atualiza com os dados novos)
+  if (!existing) {
+    const gone = one('SELECT * FROM stores WHERE cnpj=? AND deleted_at IS NOT NULL', cnpj);
+    if (gone) {
+      update('stores', gone.id, { deleted_at: null });
+      run("UPDATE trash SET restored_at=? WHERE entity='store' AND entity_id=? AND restored_at IS NULL", now(), gone.id);
+      SV.audit(req, 'loja.restaurar_por_cadastro', { entity: 'store', entityId: gone.id, storeId: gone.id, after: { cnpj } });
+      existing = one('SELECT * FROM stores WHERE id=?', gone.id);
+    }
+  }
   const fields = {
     brand_id: +body.brand_id, cnpj, razao: body.razao, fantasia: body.fantasia, address: body.address, cep: body.cep,
     municipio_ibge: body.municipio_ibge, situacao_cadastral: body.situacao_cadastral || (existing && existing.situacao_cadastral) || null,
@@ -186,9 +196,9 @@ async function upsertStore(req, body, existing) {
   if (body.franchisee_name && (body.franchisee_email || body.franchisee_phone)) {
     let fu = one("SELECT u.* FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=? AND su.kind='loja'", id);
     const ph = String(body.franchisee_phone || '').replace(/\D/g, '');
-    if (!fu) fu = all('SELECT * FROM users WHERE deleted_at IS NULL').find((u) => (body.franchisee_email && u.email && u.email.toLowerCase() === body.franchisee_email.toLowerCase()) || (ph && String(u.phone || '').replace(/\D/g, '') === ph));
+    if (!fu) fu = all('SELECT * FROM users WHERE deleted_at IS NULL').filter((u) => !L.isAdmin(u) && !L.has(u, 'franqueadora')).find((u) => (body.franchisee_email && u.email && u.email.toLowerCase() === body.franchisee_email.toLowerCase()) || (ph && String(u.phone || '').replace(/\D/g, '') === ph));
     if (fu) {
-      update('users', fu.id, { name: body.franchisee_name, email: body.franchisee_email || fu.email, phone: body.franchisee_phone || fu.phone, roles: S([...new Set([...J(fu.roles, []), 'loja'])]) });
+      update('users', fu.id, { name: body.franchisee_name, email: body.franchisee_email || fu.email, phone: body.franchisee_phone || fu.phone, roles: S([...new Set([...J(fu.roles, []), 'loja'])]), active: 1 });
     } else {
       const uid = insert('users', { name: body.franchisee_name, email: body.franchisee_email, phone: body.franchisee_phone, roles: S(['loja']), token: token(), active: 1, created_at: now(), invited_by: req.user.id });
       fu = { id: uid };
@@ -1607,6 +1617,7 @@ app.get('/manifest.webmanifest', (req, res) => res.json({ name: 'Projeto Técnic
 app.get(['/', '/c/:code'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 
 app.use((e, req, res, next) => {
+  if (!e.status && /UNIQUE constraint failed/.test(e.message || '')) { e.status = 409; e.message = 'Já existe um registro com esses dados (por exemplo, o mesmo CNPJ).'; }
   const status = e.status || (e.code === 'LIMIT_FILE_SIZE' ? 413 : 500);
   if (status >= 500) console.error(e);
   res.status(status).json({ error: status >= 500 && !e.expose ? 'Erro interno. Tente novamente.' : e.message, issues: e.issues, checks: e.checks, heavy: e.heavy, conds: e.conds });

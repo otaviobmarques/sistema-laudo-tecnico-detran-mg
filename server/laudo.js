@@ -90,14 +90,13 @@ function createLaudo(req, store, { process_type, deadline, scope_items, parent }
   if (active) throw Object.assign(new Error(`A loja ${store.fantasia} já tem o laudo ${active.code} em andamento. Conclua ou cancele antes de abrir outro.`), { status: 409 });
   const params = R.getParams();
   let data = { items: {}, empresa: {} };
-  let rt_id = store.rt_id || null;
+  let rt_id = null;
   const prev = parent || (process_type !== 'credenciamento' ? one("SELECT * FROM laudos WHERE store_id=? AND status='deferido' AND deleted_at IS NULL ORDER BY id DESC LIMIT 1", store.id) : null);
   if (prev) {
     // Renovação/alteração: reaproveita dados, boxes e campos (fotos precisam ser novas)
     const pd = J(prev.data, {});
     data = { etapa1: { ...pd.etapa1, savedAt: null, dataPedido: null, vencimentoAtual: store.cred_expiry || null }, empresa: pd.empresa || {}, items: {} };
     for (const [k, v] of Object.entries(pd.items || {})) data.items[k] = { fields: v.fields, descricao: v.descricao, plantRect: v.plantRect, videos: v.videos };
-    rt_id = prev.rt_id || rt_id;
   }
   if (process_type === 'renovacao' && store.cred_expiry) { data.etapa1 = data.etapa1 || {}; data.etapa1.vencimentoAtual = store.cred_expiry; }
   const id = insert('laudos', {
@@ -190,10 +189,10 @@ async function signLock(laudoId, { revalidate = false } = {}) {
   const dataPedido = ctx.cfg.dataPedido ? new Date(ctx.cfg.dataPedido) : new Date();
   const calBad = ctx.equipment.filter((e) => C.EQ_TYPES[e.type]?.cal && e.status === 'ativo' && (!e.cert || !e.cert.validade || new Date(e.cert.validade) < dataPedido));
   const conds = [
-    { n: 1, ok: notApproved.length === 0, msg: 'Todos os itens do Anexo II e do Anexo III aprovados pelo coordenador.', detail: notApproved.length ? `${notApproved.length} item(ns) sem aprovação: ${notApproved.map((k) => C.ITEM[k].short).join(', ')}` : '' },
-    { n: 2, ok: !!rv.concludedAt && !Object.values(reviews).some((r) => r.status === 'devolvido'), msg: 'Revisão técnica do RT concluída, sem itens devolvidos.', detail: rv.concludedAt ? '' : 'Revisão do RT não concluída.' },
+    { n: 1, ok: notApproved.length === 0, msg: 'Todos os itens do Anexo II e do Anexo III validados pela franqueadora.', detail: notApproved.length ? `${notApproved.length} item(ns) sem aprovação: ${notApproved.map((k) => C.ITEM[k].short).join(', ')}` : '' },
+    { n: 2, ok: !!rv.concludedAt && !Object.values(reviews).some((r) => r.status === 'devolvido'), msg: 'Revisão técnica concluída, sem itens devolvidos.', detail: rv.concludedAt ? '' : 'Revisão do RT não concluída.' },
     { n: 3, ok: blockers.length === 0, msg: 'Zero erros bloqueantes no motor de validação.', detail: blockers.length ? blockers.slice(0, 5).map((b) => `${b.code}: ${b.msg}`).join(' | ') : '' },
-    { n: 4, ok: openAlerts.length === 0, msg: 'Zero alertas em aberto (corrigidos ou aceitos pelo coordenador com justificativa).', detail: openAlerts.length ? `${openAlerts.length} alerta(s) sem aceite do coordenador.` : '' },
+    { n: 4, ok: openAlerts.length === 0, msg: 'Zero alertas em aberto (corrigidos ou aceitos pela franqueadora com justificativa).', detail: openAlerts.length ? `${openAlerts.length} alerta(s) sem aceite do coordenador.` : '' },
     { n: 5, ok: !!art && +artMeta.ano === ano, msg: `ART/RRT anexada e emitida em ${ano}.`, detail: !art ? 'ART/RRT não anexada.' : +artMeta.ano !== ano ? `ART/RRT de ${artMeta.ano}.` : '' },
     { n: 6, ok: linksOk, msg: 'Links do Drive revalidados e acessíveis sem login.', detail: linkMsgs.slice(0, 4).join(' | ') },
     { n: 7, ok: calBad.length === 0, msg: 'Certificados de calibração válidos na data prevista do pedido.', detail: calBad.length ? calBad.map((e) => `${C.EQ_TYPES[e.type].short} #${e.patrimonio}`).join(', ') : '' },

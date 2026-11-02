@@ -17,7 +17,7 @@ Abra `http://localhost:3000`. Na primeira execução o sistema cria o banco (`st
 
 - **Administrador:** `admin@domma.com.br` / senha `admin123`.
 - **Perfis:** só três. **Administrador** (e-mail e senha), **Franqueadora** (cria e exclui lojas, solicita e exclui preenchimentos, valida o laudo e faz a revisão técnica) e **Loja** (preenche). Franqueadora e Loja entram por link pessoal. O sistema não envia e-mail nem WhatsApp: ele gera o link e uma mensagem pronta para a franqueadora copiar e enviar.
-- O **responsável técnico** (engenheiro/arquiteto) é só um cadastro, sem acesso ao sistema. A ART/RRT e o Anexo II assinado por ele são anexados pela loja ou pela franqueadora.
+- Não há cadastro de **responsável técnico**: a loja pega com o engenheiro ou arquiteto a ART/RRT e o Anexo II assinado (gov.br) e envia os dois como anexo. O sistema confere o ano da ART e a integridade da assinatura, e registra o nome do signatário.
 
 Para apagar tudo e recriar a demonstração, rode `npm run reset`.
 
@@ -111,4 +111,4 @@ A área da loja, o checklist e os PDFs seguem a **Direção Visual Auto Visão v
 
 ## Calibração
 
-Quais equipamentos exigem certificado de calibração fica em **Administração → Parâmetros das regras → Equipamentos**. O padrão segue a especificação v2.1 (paquímetro, profundímetro, trenas de 5 m e 50 m e medidor de espessura). Ajuste conforme a Portaria.
+Quais equipamentos exigem certificado de calibração fica em **Administração → Parâmetros das regras → Equipamentos**. O padrão segue as exigências do Detran-MG: paquímetros, profundímetros, trenas (5 m e 50 m) e medidores de espessura.

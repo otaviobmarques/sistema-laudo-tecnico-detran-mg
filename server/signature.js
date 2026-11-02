@@ -72,6 +72,12 @@ function verifySignedPdf(buf, { expectedSha, expectedLength, expectedName, expec
 
   // Signatário
   const names = [...p7.cns, sig.name].filter(Boolean);
+  if (!expectedName) {
+    const who = (names.find((n) => n.includes(':')) || names[0] || 'não identificado').split(':')[0];
+    checks.push({ n: 3, ok: true, msg: `Assinado por ${who}.` });
+    checks.push({ n: 4, ok: true, msg: 'Versão atual do laudo.' });
+    return { ok: true, checks, signer: who, signers: names };
+  }
   const exp = norm(expectedName).replace(/[^a-z ]/g, '').trim();
   const cpf = String(expectedCpf || '').replace(/\D/g, '');
   let signer = null, cpfMatch = null;

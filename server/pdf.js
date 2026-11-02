@@ -47,13 +47,19 @@ function brandAsset(rel) {
   try { const buf = fs.readFileSync(f); const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20); v = { buf, w, h }; } catch {}
   return (assetCache[rel] = v);
 }
+// Embute cada imagem da marca uma única vez por documento (reutilizada em todas as páginas)
+function docImage(doc, key, buf) {
+  doc._brandImgs = doc._brandImgs || {};
+  return doc._brandImgs[key] || (doc._brandImgs[key] = doc.openImage(buf));
+}
 function drawPattern(doc, T, y, h, seed = 7) {
   // faixa oficial da marca (arquivo), repetida na horizontal
   const fx = brandAsset(T.faixa);
   if (fx) {
     const tw = h * (fx.w / fx.h);
+    const img = docImage(doc, T.faixa, fx.buf);
     doc.save().rect(0, y, A4.w, h).clip();
-    for (let x = 0; x < A4.w; x += tw) doc.image(fx.buf, x, y, { width: tw, height: h });
+    for (let x = 0; x < A4.w; x += tw) doc.image(img, x, y, { width: tw, height: h });
     doc.restore();
     return;
   }
@@ -83,7 +89,7 @@ function drawLogo(doc, brand, T, x, y, onDark = true) {
   const file = brand && (onDark ? brand.logo_dark_file : brand.logo_file);
   if (file) { try { doc.image(readFile(file), x, y, { fit: [150, 40] }); return; } catch {} }
   const off = brandAsset(onDark ? T.logoDark : T.logoLight);
-  if (off) { doc.image(off.buf, x, y - 6, { fit: [150, 46], valign: 'center' }); return; }
+  if (off) { doc.image(docImage(doc, onDark ? T.logoDark : T.logoLight, off.buf), x, y - 6, { fit: [150, 46], valign: 'center' }); return; }
   doc.fillColor(onDark ? T.headerText : T.primary).font('Bold').fontSize(T.upper ? 20 : 21).text(T.logoText, x, y, { lineBreak: false });
   doc.font('Body').fontSize(5.8).fillColor(onDark ? T.headerText : T.text).text(T.logoSub, x + 1, y + 26, { characterSpacing: 1.2, lineBreak: false });
 }
@@ -293,8 +299,8 @@ function headerRows(ctx) {
   const e = ctx.data.empresa || {}, s = ctx.store, rt = ctx.rt;
   return [
     [['Razão social', e.razao || s.razao], ['Data', dt(ctx.cfg.dataPedido)]],
-    [['CNPJ', maskCnpj(e.cnpj || s.cnpj)], ['Responsável técnico', rt ? rt.name : '—']],
-    [['Município · Porte', `${ctx.municipio ? ctx.municipio.name : '—'} · ${ctx.porte ? C.PORTE_LABEL[ctx.porte] + ' porte' : '—'}`], [rt && rt.council === 'CAU' ? 'CAU' : 'CREA', rt ? `${rt.reg_number}${rt.uf ? ' / ' + rt.uf : ''}` : '—']],
+    [['CNPJ', maskCnpj(e.cnpj || s.cnpj)], ['Responsável técnico', 'Conforme ART/RRT anexa e assinatura deste documento']],
+    [['Município · Porte', `${ctx.municipio ? ctx.municipio.name : '—'} · ${ctx.porte ? C.PORTE_LABEL[ctx.porte] + ' porte' : '—'}`], ['CREA/CAU', 'Conforme ART/RRT anexa']],
     [['Representante legal', e.repName || s.rep_name], ['Cargo/função', e.repRole || s.rep_role]],
   ];
 }
@@ -362,14 +368,14 @@ async function renderAnexoII(ctx) {
   itemHeading(doc, ctx.T, '•', 'Declaração de acessibilidade');
   doc.font('Body').fontSize(7.6).fillColor(ctx.T.text).text(accessibilityText(ctx), { width: CW, lineGap: 1.5 });
   doc.moveDown(1);
-  signatureBlock(doc, ctx, ctx.rt ? ctx.rt.name : 'Responsável técnico', ctx.rt ? `${ctx.rt.council === 'CAU' ? 'Arquiteto(a) e Urbanista · CAU' : 'Engenheiro(a) · CREA'} ${ctx.rt.reg_number}${ctx.rt.uf ? '/' + ctx.rt.uf : ''}` : '', 'Assinatura digital gov.br do responsável técnico (ART/RRT anexa)');
+  signatureBlock(doc, ctx, 'Responsável técnico (engenheiro ou arquiteto)', 'Registro CREA/CAU conforme ART/RRT anexa', 'Assinatura digital gov.br do responsável técnico');
   await footers(doc, ctx, `${ctx.brand?.name || ''} · ${(ctx.data.empresa?.fantasia) || ctx.store.fantasia} · Laudo nº ${ctx.laudo.code} · ${ctx.versionN ? 'versão ' + ctx.versionN : 'prévia'}`);
   return finish(doc);
 }
 
 function accessibilityText(ctx) {
   const rt = ctx.rt;
-  return `Eu, ${rt ? rt.name : '[responsável técnico]'}, ${rt && rt.council === 'CAU' ? 'arquiteto(a) e urbanista, CAU' : 'engenheiro(a), CREA'} nº ${rt ? rt.reg_number : '[registro]'}, declaro, para os fins do art. 34 §16, "a", da Portaria CET-MG nº 1.290/2023, com redação da ${PORTARIA}, que as instalações da unidade ${(ctx.data.empresa?.razao) || ctx.store.razao}, CNPJ ${maskCnpj(ctx.store.cnpj)}, atendem às condições de acessibilidade previstas na ABNT NBR 9050:2020, na Lei nº 13.146/2015, na Lei nº 10.048/2000, na Lei nº 10.098/2000 e na Convenção Internacional sobre os Direitos das Pessoas com Deficiência.${(ctx.data.rtReview || {}).acessibilidade ? '' : ' (pendente de confirmação do RT)'}`;
+  return `O responsável técnico signatário deste laudo, identificado na ART/RRT anexa, declara, para os fins do art. 34 §16, "a", da Portaria CET-MG nº 1.290/2023, com redação da ${PORTARIA}, que as instalações da unidade ${(ctx.data.empresa?.razao) || ctx.store.razao}, CNPJ ${maskCnpj(ctx.store.cnpj)}, atendem às condições de acessibilidade previstas na ABNT NBR 9050:2020, na Lei nº 13.146/2015, na Lei nº 10.048/2000, na Lei nº 10.098/2000 e na Convenção Internacional sobre os Direitos das Pessoas com Deficiência.${(ctx.data.rtReview || {}).acessibilidade ? '' : ' (pendente de confirmação)'}`;
 }
 
 function signatureBlock(doc, ctx, name, line2, note) {

@@ -116,7 +116,6 @@ export async function etapa1(id) {
           <div><label class="f">CPF do representante</label><input name="empresa.repCpf" value="${cpfMask(emp.repCpf)}" inputmode="numeric" ${ro ? 'disabled' : ''}><div class="hint">A Receita mostra o CPF mascarado: digite o CPF completo.</div></div>
           <div><label class="f">Cargo/função</label><input name="empresa.repRole" value="${emp.repRole || ''}" ${ro ? 'disabled' : ''}></div>
           <div><label class="f">E-mail e WhatsApp do contato</label><div class="row" style="flex-wrap:nowrap"><input name="empresa.contactEmail" value="${emp.contactEmail || ''}" ${ro ? 'disabled' : ''}><input name="empresa.contactPhone" value="${emp.contactPhone || ''}" ${ro ? 'disabled' : ''}></div></div>
-          <div style="grid-column:1/-1"><label class="f">Responsável técnico (engenheiro/arquiteto)</label><div class="row" style="flex-wrap:nowrap"><select name="rt_id" ${ro ? 'disabled' : ''}><option value="">Selecione</option>${d.rts.map((r) => html`<option value="${r.id}" ${r.id === d.laudo.rt_id ? 'selected' : ''}>${r.name} · ${r.council} ${r.reg_number}${r.validated ? ' ✓' : ''}</option>`)}</select>${ro ? '' : html`<a class="btn" href="#/laudo/${id}/rts">+ Cadastrar outro RT</a>`}</div><div class="hint">A franqueadora confere o registro no CREA/CAU. O RT não precisa de acesso ao sistema.</div></div>
         </div></div>
       ${ro ? '' : html`<div class="row"><button class="btn brand lg">Salvar e gerar checklist</button><button type="button" class="btn" id="geo">Usar minha localização como endereço da unidade</button></div>`}
       </div>
@@ -133,7 +132,7 @@ export async function etapa1(id) {
         e.preventDefault();
         const v = readForm(f);
         v.etapa1.pesados = !!v.etapa1.pesados; v.etapa1.movel = !!v.etapa1.movel;
-        try { await put(`/api/laudos/${id}/etapa1`, { etapa1: v.etapa1, empresa: v.empresa, rt_id: v.rt_id ? +v.rt_id : null, geo }); toast('Etapa 1 salva. Checklist atualizado.', 'ok'); location.hash = `#/laudo/${id}/checklist`; } catch (er) { showErr(er); }
+        try { await put(`/api/laudos/${id}/etapa1`, { etapa1: v.etapa1, empresa: v.empresa, geo }); toast('Etapa 1 salva. Checklist atualizado.', 'ok'); location.hash = `#/laudo/${id}/checklist`; } catch (er) { showErr(er); }
       };
     },
   };
@@ -509,7 +508,6 @@ export async function documents(id) {
     title: 'Documentos (Bloco A)', ctx: ctxOf(d),
     body: html`${statusBanner(d)}<div class="card"><p class="small muted">Cada arquivo deve ter no máximo 3 MB (limite do SCE). Arquivos pesados, como vídeos, ficam no Google Drive.</p>
       ${rows.map((x) => html`${docLine(d, x.kind, x.title + (x.optional ? ' (quando exigido)' : ''), ed ? '' : 'disabled', x.kind === 'incendio')}<div class="small muted" style="margin:-6px 0 8px">${x.note}</div>`)}
-      <div class="list-item" style="padding-left:0"><div style="flex:1"><div class="t1">ART/RRT do laudo</div><div class="t2">${d.files.some((f) => f.kind === 'art') ? 'anexada' : 'providenciada pelo RT e anexada pela loja ou pela franqueadora'}</div></div></div>
       <div class="list-item" style="padding-left:0"><div style="flex:1"><div class="t1">Certificados de calibração</div><div class="t2">ficam no cadastro de cada equipamento</div></div><a class="btn sm" href="#/laudo/${id}/equipamentos">Abrir equipamentos</a></div></div>
       ${d.files.some((f) => f.kind === 'planta') ? html`<div class="card"><h3>Planta enviada</h3><img src="${d.files.filter((f) => f.kind === 'planta').pop().url}?v=image" style="max-width:100%;border:1px solid var(--line);border-radius:8px" alt="Planta"><p class="small muted">Em cada item do Anexo II, use "Marcar na planta". Se a planta mudar, refaça as marcações.</p></div>` : ''}`,
     mount(root) {
@@ -651,7 +649,7 @@ export async function signing(id) {
   const st = d.laudo.status;
   const lock = ['aprovado_coord', 'revisao_tecnica', 'liberado_assinatura'].includes(st) || st === 'em_conferencia' ? await get(`/api/laudos/${id}/sign-lock`).catch(() => null) : null;
   const pkg = ['liberado_assinatura', 'pronto_protocolo', 'protocolado', 'exigencia', 'deferido', 'indeferido'].includes(st) ? await get(`/api/laudos/${id}/package`).catch(() => null) : null;
-  const docCard = (k, title, who, can) => { const x = docs[k]; if (!x) return ''; const s = x.signed && !x.signed.invalidated_at ? x.signed : null; return html`<div class="card"><div class="row between"><div><b>${title}</b><div class="small muted">Assina: ${who}${k === 'a2' ? ' · o PDF assinado pelo RT é enviado pela loja ou pela franqueadora' : ''}</div></div>${s ? html`<span class="pill ok">✓ Assinado e conferido</span>` : html`<span class="pill warn">Aguardando assinatura</span>`}</div>
+  const docCard = (k, title, who, can) => { const x = docs[k]; if (!x) return ''; const s = x.signed && !x.signed.invalidated_at ? x.signed : null; return html`<div class="card"><div class="row between"><div><b>${title}</b><div class="small muted">Assina: ${who}${k === 'a2' ? ' · baixe o PDF, peça a assinatura dele e envie o arquivo assinado aqui' : ''}</div></div>${s ? html`<span class="pill ok">✓ Assinado e conferido</span>` : html`<span class="pill warn">Aguardando assinatura</span>`}</div>
     ${s ? html`<p class="small" style="margin:8px 0 0">${s.method === 'firma' ? 'Firma reconhecida' : 'Assinatura gov.br válida'} · arquivo idêntico ao gerado · signatário ${s.signer || '—'} · ${fmtDT(s.at)} · ${fmtMB(s.size)}</p><a class="btn sm" href="/api/laudos/${id}/doc/${k}?signed=1" style="margin-top:6px">Baixar assinado</a>`
       : can ? html`<div class="row" style="margin-top:10px"><a class="btn" href="/api/laudos/${id}/doc/${k}">1. Baixar PDF para assinar</a><a class="btn" href="https://assinador.iti.br/" target="_blank" rel="noopener">2. Abrir assinador gov.br ↗</a><button class="btn primary" data-up="${k}">3. Enviar PDF assinado</button>${k === 'a3' ? html`<button class="btn" data-firma="a3">Enviar via com firma reconhecida</button>` : ''}</div>
         <div class="note small" style="margin-top:8px">Assine no gov.br <b>sem abrir e salvar o arquivo em outro programa</b>. Se o arquivo for alterado, o sistema recusa.</div>
@@ -662,7 +660,7 @@ export async function signing(id) {
     body: html`${statusBanner(d)}
     ${lock ? html`<div class="card"><h3>Condições para assinar (${lock.conds.filter((c) => c.ok).length} de 7)</h3>${lock.conds.map((c) => html`<div class="list-item"><span class="dot ${c.ok ? 'ok' : 'err'}"></span><div style="flex:1"><div class="t1">${c.msg}</div>${c.detail ? html`<div class="t2">${c.detail}</div>` : ''}</div></div>`)}</div>` : ''}
     ${st === 'liberado_assinatura' || st === 'pronto_protocolo' || st === 'protocolado' || st === 'deferido' ? html`<div class="note ok" style="margin-bottom:12px"><b>Laudo 100% validado.</b> Os documentos foram gerados e travados (versão ${v?.code}).</div>
-      ${docCard('a2', 'Anexo II · Laudo Técnico', `${d.rt?.name} (RT) · ${d.rt?.council} ${d.rt?.reg_number}`, d.perms.signA2)}${docCard('a3', 'Anexo III · Declaração de Equipamentos', `${d.data.empresa?.repName || d.store.rep_name} (representante legal)`, d.perms.signA3)}` : ''}
+      ${docCard('a2', 'Anexo II · Laudo Técnico', 'o engenheiro ou arquiteto responsável (gov.br)', d.perms.signA2)}${docCard('a3', 'Anexo III · Declaração de Equipamentos', `${d.data.empresa?.repName || d.store.rep_name} (representante legal)`, d.perms.signA3)}` : ''}
     ${pkg ? html`<div class="card"><h3>Pacote para o SCE</h3><p class="small muted">Limite do SCE: 3 MB por arquivo; um Anexo não pode ser dividido. A compressão acontece antes da assinatura.</p>
       <table class="t"><tbody>${pkg.files.map((f) => html`<tr><td>${f.name}</td><td style="width:180px">${bar(f.pct)}<span class="small ${f.over ? '' : 'muted'}" style="color:${f.over ? 'var(--err)' : ''}">${fmtMB(f.size)} · ${f.pct}% do limite</span></td><td><a class="btn sm" href="${f.url}" target="_blank">Baixar</a></td></tr>`)}</tbody></table>
       ${pkg.consulta ? html`<p class="small" style="margin-top:8px">Link de consulta (originais e vídeos): <a href="${pkg.consulta}" target="_blank">${pkg.consulta}</a></p>` : ''}</div>` : ''}
@@ -715,19 +713,4 @@ export async function timeline(id) {
   const d = await load(id);
   const tl = await get(`/api/laudos/${id}/timeline`);
   return { title: 'Linha do tempo do laudo', ctx: ctxOf(d), body: html`<div class="card pad0">${tl.map((r) => html`<div class="list-item"><span class="dot info"></span><div style="flex:1"><div class="t1">${r.action}${r.item ? ' · ' + (ITEM(r.item)?.short || r.item) : ''}</div><div class="t2">${r.user_name || 'sistema'} · ${fmtDT(r.at)}${r.after && r.after.status ? ' → ' + r.after.status : ''}</div></div></div>`)}</div>` };
-}
-
-// ---------- Responsáveis técnicos (cadastro, sem acesso ao sistema) ----------
-export async function rtsView(id) {
-  const d = await load(id);
-  return {
-    title: 'Responsáveis técnicos', ctx: ctxOf(d),
-    body: html`<div class="card pad0">${d.rts.map((r) => html`<div class="list-item"><div class="avatar">${r.name[0]}</div><div style="flex:1"><div class="t1">${r.name} ${r.id === d.laudo.rt_id ? html`<span class="pill info">indicado neste laudo</span>` : ''}</div><div class="t2">${r.council} ${r.reg_number} / ${r.uf} · ${r.validated ? '✓ registro validado pela franqueadora' : 'registro ainda não validado'}</div></div></div>`)}</div>
-    ${d.perms.storeRole === 'loja' || d.perms.admin || has('franqueadora') ? html`<div class="card"><h3>Cadastrar novo RT</h3><p class="small muted">Pode ser um engenheiro ou arquiteto diferente por loja. Ele não acessa o sistema: os dados entram no Anexo II e a ART/RRT e o PDF assinado por ele são anexados pela loja ou pela franqueadora.</p>
-      <form id="rf" class="grid g3"><div><label class="f">Nome *</label><input name="name" required></div><div><label class="f">CPF</label><input name="cpf"></div><div><label class="f">Conselho *</label><select name="council"><option>CREA</option><option>CAU</option></select></div><div><label class="f">Nº de registro *</label><input name="reg_number" required></div><div><label class="f">UF</label><input name="uf" value="MG"></div><div><label class="f">E-mail</label><input name="email" type="email"></div><div><label class="f">WhatsApp</label><input name="phone"></div><div style="align-self:end"><button class="btn brand block">Cadastrar e indicar</button></div></form></div>` : ''}`,
-    mount(root) {
-      const f = root.querySelector('#rf');
-      if (f) f.onsubmit = async (e) => { e.preventDefault(); try { const r = await post('/api/rts', readForm(f)); if (d.perms.editGeneral && d.data.etapa1?.savedAt) { await put(`/api/laudos/${id}/etapa1`, { etapa1: d.data.etapa1, empresa: d.data.empresa || {}, rt_id: r.id }); toast('RT cadastrado e indicado no laudo.', 'ok'); } else toast('RT cadastrado. Indique-o na Etapa 1 (Dados do processo).', 'ok'); import('../app.js').then((m) => m.render()); } catch (er) { showErr(er); } };
-    },
-  };
 }

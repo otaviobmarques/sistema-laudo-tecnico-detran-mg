@@ -661,11 +661,12 @@ app.post('/api/laudos/:id/files', need(), upload.single('file'), async (req, res
     meta.image = SV.saveFile(png, 'png');
   }
   if (kind === 'art') {
-    meta.ano = +req.body.ano || null; meta.numero = req.body.numero || null; meta.registro = req.body.registro || null;
+    meta.ano = +req.body.ano || null; meta.numero = req.body.numero || null;
     const text = ext === 'pdf' ? SV.pdfText(req.file.buffer) : '';
     if (text) {
       const years = [...new Set((text.match(/\b20\d{2}\b/g) || []).map(Number))];
       meta.anosNoTexto = years;
+      if (!meta.ano) { const e1 = J(l.data, {}).etapa1 || {}; const want = (e1.dataPedido ? new Date(e1.dataPedido) : new Date()).getFullYear(); meta.ano = years.includes(want) ? want : years.length ? Math.max(...years) : null; }
       if (meta.ano && years.length && !years.includes(meta.ano)) meta.aviso = `O ano informado (${meta.ano}) não aparece no texto da ART/RRT (${years.join(', ')}).`;
     }
   }
@@ -1090,7 +1091,7 @@ async function acceptSigned(req, l, docKey, buf, method, originalName) {
   } else {
     const rt = l.rt_id ? one('SELECT * FROM rts WHERE id=?', l.rt_id) : null;
     const older = all('SELECT * FROM versions WHERE laudo_id=? AND n<?', l.id, v.n).flatMap((ov) => { const od = J(ov.docs, {})[docKey]; return od ? [{ n: ov.n, sha: od.sha, length: od.length }] : []; });
-    result = SIG.verifySignedPdf(buf, { expectedSha: d.sha, expectedLength: d.length, expectedName: docKey === 'a2' ? rt?.name : (data.empresa?.repName || store.rep_name), expectedCpf: docKey === 'a2' ? rt?.cpf : (data.empresa?.repCpf || store.rep_cpf), olderVersions: older });
+    result = SIG.verifySignedPdf(buf, { expectedSha: d.sha, expectedLength: d.length, expectedName: docKey === 'a2' ? null : (data.empresa?.repName || store.rep_name), expectedCpf: docKey === 'a2' ? rt?.cpf : (data.empresa?.repCpf || store.rep_cpf), olderVersions: older });
   }
   if (!result.ok) { SV.audit(req, 'assinatura.recusada', { laudoId: l.id, after: { doc: docKey, motivo: result.reason, checks: result.checks } }); throw err(422, result.reason, { checks: result.checks }); }
   const file = SV.saveFile(buf, 'pdf'); // guardado exatamente como recebido
@@ -1117,8 +1118,8 @@ app.post('/api/laudos/:id/demo-sign/:doc', need(), async (req, res) => {
   const v = L.currentVersion(l.id), d = J(v.docs, {})[req.params.doc];
   if (!d) throw err(404, 'Documento não gerado.');
   const data = J(l.data, {}), store = one('SELECT * FROM stores WHERE id=?', l.store_id), rt = one('SELECT * FROM rts WHERE id=?', l.rt_id);
-  const name = req.params.doc === 'a2' ? rt.name : (data.empresa?.repName || store.rep_name);
-  const cpf = req.params.doc === 'a2' ? rt.cpf : (data.empresa?.repCpf || store.rep_cpf);
+  const name = req.params.doc === 'a2' ? 'ENGENHEIRO DEMONSTRACAO' : (data.empresa?.repName || store.rep_name);
+  const cpf = req.params.doc === 'a2' ? '' : (data.empresa?.repCpf || store.rep_cpf);
   let signed = SIG.simulateGovbrSignature(SV.readFile(d.file), req.body.wrongSigner ? 'FULANO DE TAL' : name, cpf);
   if (req.body.tamper) signed = Buffer.concat([signed, Buffer.from('\n% alterado\n')]);
   if (req.body.download) { res.setHeader('Content-Type', 'application/pdf'); res.setHeader('Content-Disposition', `attachment; filename="${l.code}-${req.params.doc}-assinado-simulacao.pdf"`); return res.send(signed); }

@@ -66,7 +66,7 @@ function buildContext(laudoId) {
     ? all(`SELECT * FROM photos WHERE item IN (${equipment.map(() => '?').join(',')}) AND deleted_at IS NULL`, ...equipment.map((e) => 'eq:' + e.id))
     : [];
   for (const p of eqPhotos) { const e = equipment.find((x) => 'eq:' + x.id === p.item); if (e) e.photosArr.push(p); }
-  const rt = laudo.rt_id ? one('SELECT * FROM rts WHERE id=?', laudo.rt_id) : null;
+  const rt = null; // não há cadastro de RT: os dados dele vêm na ART/RRT e na assinatura do Anexo II
   return { laudo, store, data, params, porte, porteSource, municipio, cfg, photos, files, equipment, eqPhotos, rt,
     reviews: J(laudo.reviews, {}), alertsJust: J(laudo.alerts_just, {}) };
 }
@@ -94,7 +94,6 @@ function evaluate(ctx) {
     if (!(emp.repName || store.rep_name) || !(emp.repCpf || store.rep_cpf)) add('E01', 'B', null, 'Informe nome e CPF do representante legal.', 'rep');
     else if (!validCPF(emp.repCpf || store.rep_cpf)) add('E01', 'B', null, 'CPF do representante legal inválido.', 'repcpf');
   }
-  if (!laudo.rt_id) add('E02', 'B', null, 'Indique o responsável técnico (engenheiro ou arquiteto).', 'rt');
   if (!cfg.savedAt) add('E03', 'B', null, 'Salve a Etapa 1 (dados do processo e configuração da unidade).', 'etapa1');
   if (!cfg.dataPedido) add('E03', 'B', null, 'Informe a data prevista do pedido.', 'dataPedido');
   if (!(cfg.elevacao || []).length) add('E03', 'B', 'a3_1', 'Escolha o(s) equipamento(s) de elevação utilizado(s).', 'elev');
@@ -358,16 +357,14 @@ function evaluate(ctx) {
   // ---- Etapas posteriores ----
   const rv = data.rtReview || {};
   const art = ctx.files.filter((x) => x.kind === 'art').pop();
-  if (!art) add('R15', 'B', null, 'ART/RRT não anexada pelo responsável técnico.', 'art', 'rt');
+  if (!art) add('R15', 'B', null, 'ART/RRT do engenheiro/arquiteto não anexada.', 'art', 'rt');
   else {
     const meta = J(art.meta, {});
     const ano = (cfg.dataPedido ? new Date(cfg.dataPedido) : new Date()).getFullYear();
     if (+meta.ano !== ano) add('R15', 'B', null, `ART/RRT emitida em ${meta.ano || '?'}; precisa ser de ${ano} (ano do pedido).`, 'artano', 'rt');
-    if (ctx.rt && meta.registro && norm(meta.registro).replace(/\W/g, '') !== norm(ctx.rt.reg_number).replace(/\W/g, '')) add('R15', 'B', null, `Nº ${meta.registro} da ART/RRT difere do registro do RT (${ctx.rt.reg_number}).`, 'artreg', 'rt');
   }
-  if (!rv.descricao) add('RT1', 'B', null, 'Descrição técnica das instalações e dimensionamentos pendente (RT).', 'desc', 'rt');
-  if (!rv.acessibilidade) add('RT2', 'B', null, 'Declaração de acessibilidade do RT pendente (art. 34 §16, "a").', 'acc', 'rt');
-  if (ctx.rt && !ctx.rt.validated_at) add('RT3', 'B', null, 'Registro do RT ainda não validado pelo coordenador (CREA/CAU).', 'val', 'rt');
+  if (!rv.descricao) add('RT1', 'B', null, 'Descrição técnica das instalações e dimensionamentos pendente.', 'desc', 'rt');
+  if (!rv.acessibilidade) add('RT2', 'B', null, 'Declaração de acessibilidade pendente (art. 34 §16, "a").', 'acc', 'rt');
 
   return issues;
 }

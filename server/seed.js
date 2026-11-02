@@ -203,8 +203,8 @@ async function ensureSeed() {
   const alexandre = U('Alexandre Souza', ['franqueadora'], { email: 'alexandre@franqueadora.com.br', phone: '(31) 98888-1001' });
   const petala = U('Pétala Ramos', ['franqueadora'], { email: 'petala@franqueadora.com.br', phone: '(31) 98888-1002' });
   const marina = alexandre;
-  const rt1 = insert('rts', { user_id: null, name: 'Venilton J. Borges', cpf: genCpf(11), council: 'CREA', reg_number: 'MG0000034311D', uf: 'MG', email: 'venilton@engenharia.com.br', phone: '(35) 97777-2001', validated_by: alexandre, validated_at: now(), created_at: now() });
-  const rt2 = insert('rts', { user_id: null, name: 'Ana Paula Rezende', cpf: genCpf(12), council: 'CAU', reg_number: 'A123456-7', uf: 'MG', email: 'ana@arquitetura.com.br', phone: '(35) 97777-2002', created_at: now() });
+  const rt1 = null;
+  const rt2 = null;
 
   const mun = (n) => one('SELECT ibge FROM municipalities WHERE name=?', n).ibge;
   const stores = [

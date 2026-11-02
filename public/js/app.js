@@ -35,7 +35,6 @@ const routes = [
   [/^\/laudo\/(\d+)\/versoes$/, LJ.versions],
   [/^\/laudo\/(\d+)\/historico$/, LJ.timeline],
   [/^\/laudo\/(\d+)\/equipamentos$/, LJ.equipment],
-  [/^\/laudo\/(\d+)\/rts$/, LJ.rtsView],
   [/^\/fila$/, CF.queue],
   [/^\/fila\/(devolvidos|aprovados)$/, CF.queue],
   [/^\/conferencia\/(\d+)$/, CF.review],
@@ -69,7 +68,7 @@ function navItems(ctx) {
     it(`/laudo/${id}/anexo2`, 'Anexo II · Infraestrutura'); it(`/laudo/${id}/anexo3`, 'Anexo III · Equipamentos'); it(`/laudo/${id}/documentos`, 'Documentos');
     it(`/laudo/${id}/envio`, 'Envio para validação'); it(`/laudo/${id}/assinatura`, 'Assinatura e protocolo');
     sec('Cadastros');
-    it(`/laudo/${id}/equipamentos`, 'Equipamentos da loja'); it(`/laudo/${id}/rts`, 'Responsável técnico'); it(`/laudo/${id}/versoes`, 'Versões e consulta');
+    it(`/laudo/${id}/equipamentos`, 'Equipamentos da loja'); it(`/laudo/${id}/versoes`, 'Versões e consulta');
     if (isStoreUser() && S.me.stores.length > 1) it('/loja', 'Trocar de loja');
     if (!isStoreUser()) { sec('Franqueadora'); it(`/conferencia/${id}`, 'Validar este laudo'); it('/painel', 'Voltar ao painel'); }
     return items;

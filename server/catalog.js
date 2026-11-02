@@ -112,7 +112,7 @@ const ELEVACAO = { elevador: 'Elevador automotivo', macaco: 'Macaco hidráulico 
 // Documentos do Bloco A (kind do arquivo)
 const DOCS = [
   { kind: 'planta', title: 'Planta ou croqui do imóvel com cotas', who: 'loja', note: 'Base para as plantas de localização de cada item do Anexo II (PDF ou imagem).' },
-  { kind: 'art', title: 'ART (CREA) ou RRT (CAU) do laudo', who: 'rt', note: 'Emitida no ano do pedido. Providenciada pelo responsável técnico.' },
+  { kind: 'art', title: 'ART (CREA) ou RRT (CAU) do laudo', who: 'loja', note: 'Peça ao engenheiro ou arquiteto e anexe aqui. Precisa ser emitida no ano do pedido.' },
   { kind: 'plano_calibracao', title: 'Plano de calibração e verificação metrológica', who: 'loja', optional: true, note: 'Anexo ao item 1 do Anexo III, quando exigido.' },
   { kind: 'doc_boroscopio', title: 'Documento da resolução da câmera móvel (boroscópio)', who: 'loja', note: 'Manual, ficha técnica ou nota fiscal com especificação ≥ 800 × 600.' },
   { kind: 'contrato_rede', title: 'Contrato de rede estruturada de dados', who: 'loja', note: 'Item 15 do Anexo III.' },

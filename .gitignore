@@ -1,3 +1,6 @@
 node_modules/
 storage/
+dados/
+backups/
+.env
 *.zip

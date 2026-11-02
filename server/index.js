@@ -88,9 +88,11 @@ app.post('/api/auth/admin-login', (req, res) => {
   const code = String(crypto.randomInt(100000, 999999));
   const id = token(24);
   insert('sessions', { id, user_id: u.id, via: 'senha+2fa', ua: String(req.headers['user-agent'] || '').slice(0, 200), ip: req.ip, created_at: now(), pending_2fa: S({ code, exp: Date.now() + 10 * 60000, tries: 0 }) });
-  SV.notify({ channel: 'sms', to: u.phone || u.email, toName: u.name, subject: 'Código de verificação', body: `Seu código de acesso ao Laudo ECV é ${code}. Válido por 10 minutos.`, kind: '2fa' });
+  const smtp = !!process.env.SMTP_HOST;
+  SV.notify({ channel: smtp ? 'email' : 'sms', to: smtp ? u.email : u.phone || u.email, toName: u.name, subject: 'Código de verificação', body: `Seu código de acesso ao Laudo ECV é ${code}. Válido por 10 minutos.`, kind: '2fa' });
+  if (!smtp && !DEMO) console.log(`[2FA] Sem SMTP configurado — código de acesso de ${u.email}: ${code}`);
   res.cookie('pending', id, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60000 });
-  res.json({ ok: true, sentTo: (u.phone || u.email || '').replace(/.(?=.{4})/g, '•'), demoCode: DEMO ? code : undefined });
+  res.json({ ok: true, sentTo: ((process.env.SMTP_HOST ? u.email : u.phone || u.email) || '').replace(/.(?=.{4})/g, '•'), demoCode: DEMO ? code : undefined });
 });
 app.post('/api/auth/admin-2fa', (req, res) => {
   const s = one('SELECT * FROM sessions WHERE id=?', req.cookies.pending || '');

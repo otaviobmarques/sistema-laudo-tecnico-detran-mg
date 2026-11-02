@@ -29,8 +29,11 @@ Para apagar tudo e recriar a demonstração, rode `npm run reset`.
 | `DATA_DIR` | Pasta do banco e dos arquivos (padrão `./storage`) |
 | `DEMO_MODE` | `0` desliga a demonstração: sem dados fictícios, sem o código 2FA na tela e sem o simulador de assinatura |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Credenciais do primeiro Administrador (com `DEMO_MODE=0` a senha padrão é aleatória e aparece no console) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | E-mail real (código 2FA, links pessoais, avisos). Sem SMTP, as mensagens só ficam registradas e o código 2FA aparece no log do servidor |
 
 O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
+
+**Instalação em VPS (Hostinger):** veja [`deploy/HOSTINGER.md`](deploy/HOSTINGER.md) — Docker Compose com HTTPS automático (Caddy) e backup diário.
 
 ## O que está implementado
 

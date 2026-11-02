@@ -98,7 +98,7 @@ function layout(view, ctx) {
       <div class="logo"><i></i>Projeto Técnico<br>DETRAN MG</div>
       ${sideNav}
       <div class="grow"></div>
-      <div class="dev">Desenvolvido por<b>${DOMMA} Domma</b></div>
+      <div class="dev">Desenvolvido por${DOMMA}</div>
     </aside>
     <div class="main">
       ${!S.online ? html`<div class="offline">Sem internet — as fotos tiradas ficam guardadas neste aparelho e sobem quando a conexão voltar. Mantenha a página aberta.</div>` : ''}

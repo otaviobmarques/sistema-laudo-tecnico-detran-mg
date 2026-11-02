@@ -1,11 +1,11 @@
 // Telas de acesso e página pública de consulta.
-import { S, html, get, post, api, toast, showErr, fmtDate, fmtDT, fmtMB, cnpjMask, applyBrand, brandBar, DOMMA, esc } from '../core.js';
+import { S, html, get, post, api, toast, showErr, fmtDate, fmtDT, fmtMB, cnpjMask, applyBrand, brandBar, DOMMA, DOMMA_LIGHT, esc } from '../core.js';
 
 const authShell = (right) => html`<div class="auth">
   <div class="l"><div style="display:flex;align-items:center;gap:10px;font-weight:700"><i style="width:22px;height:22px;border-radius:6px;background:var(--yellow);display:inline-block"></i>Projeto Técnico DETRAN MG</div>
     <h1>Projeto Técnico DETRAN MG</h1><p>Montagem do Laudo Técnico de Infraestrutura (Anexo II) e da Declaração de Equipamentos (Anexo III) — Portaria CET-MG nº 01524/2025.</p>
     <div class="brands">${(S.me?.brands || []).map((b) => html`<span style="color:${b.theme.accent}">${b.name}</span>`)}</div>
-    <div class="dev">Desenvolvido por<b>${DOMMA} Domma Tecnologia</b></div></div>
+    <div class="dev">Desenvolvido por${DOMMA}</div></div>
   <div class="r">${right}</div></div>`;
 
 export function adminLogin() {
@@ -35,7 +35,7 @@ export function requestLink() {
     <p>O link é pessoal e é gerado pela <b>franqueadora</b>. Peça a ela um novo link: ela gera na hora e envia para você.</p>
     <p class="small muted">Por segurança, o link antigo pode ser revogado quando um novo é gerado.</p>
     <hr><a href="#/login" class="small">Sou da franqueadora / administrador</a>
-    <div class="small muted" style="margin-top:24px">Desenvolvido por ${DOMMA} <b>Domma Tecnologia</b></div></div></div>` };
+    <div class="small muted" style="margin-top:24px"><span class="dev-line">Desenvolvido por ${DOMMA_LIGHT}</span></div></div></div>` };
 }
 export const invalidLink = () => ({ title: 'Link inválido', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card"><h2>Este link não é mais válido</h2><p>O link pode ter sido revogado ou substituído por um novo. Peça um novo link à franqueadora.</p><a class="btn primary block" href="#/pedir-link">Como conseguir um novo link</a></div></div>` });
 export const expired = () => ({ title: 'Acesso', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card"><h2>Acesso expirado neste aparelho</h2><p>Abra novamente o seu link pessoal para continuar de onde parou.</p><a class="btn primary block" href="#/pedir-link">Não tenho o link</a><p class="small"><a href="#/login">Sou administrador</a></p></div></div>` });
@@ -64,7 +64,7 @@ export async function firstAccess() {
         <button class="btn brand block lg" id="go" disabled>Entrar</button>
         <p class="small muted" style="margin-top:12px">Os dados estão errados? Fale com a franqueadora.</p>
       </div>
-      <p class="small muted center">Desenvolvido por ${DOMMA} <b>Domma Tecnologia</b></p>
+      <p class="small muted center"><span class="dev-line">Desenvolvido por ${DOMMA_LIGHT}</span></p>
     </div>`,
     mount(root) {
       const ok = root.querySelector('#ok'), b = root.querySelector('#go');
@@ -104,7 +104,7 @@ export async function consulta(app, code, pw) {
     ${d.videos.length ? html`<div class="card"><h3>Vídeos (Google Drive)</h3>${d.videos.map((v) => html`<div class="list-item"><div style="flex:1">${v.label}</div><a class="btn sm" href="${v.url}" target="_blank" rel="noopener">Abrir vídeo</a></div>`)}</div>` : ''}
     ${d.attachments.length ? html`<div class="card"><h3>Anexos</h3>${d.attachments.map((a) => html`<div class="list-item"><div style="flex:1">${a.name}</div><a class="btn sm" href="${a.url}" target="_blank">Abrir</a></div>`)}</div>` : ''}
     <div class="card"><h3>Fotos originais em alta resolução (${d.photos.length})</h3><div class="photos">${d.photos.map((p) => html`<a class="ph" href="${p.url}" target="_blank"><img loading="lazy" src="${p.url}${p.url.includes('?') ? '&' : '?'}v=small" alt=""><div class="cap">${p.caption}</div></a>`)}</div></div>
-    <p class="small muted center">CPFs e dados pessoais mascarados (LGPD). Cada abertura desta página é registrada.<br>Desenvolvido por ${DOMMA} <b>Domma Tecnologia</b></p>
+    <p class="small muted center">CPFs e dados pessoais mascarados (LGPD). Cada abertura desta página é registrada.<br><span class="dev-line">Desenvolvido por ${DOMMA_LIGHT}</span></p>
   </div>`);
   app.querySelector('#vf').onsubmit = async (e) => {
     e.preventDefault();

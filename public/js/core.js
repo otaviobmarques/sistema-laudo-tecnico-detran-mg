@@ -154,4 +154,6 @@ export function brandBar(brand, ctx, menu) {
   return html`<div class="brandbar">${menu ? html`<button class="burger" aria-label="Menu" style="color:var(--brand-text);margin-left:-6px">☰</button>` : ''}${brandLogo(brand, true)}<div class="ctx">${ctx || ''}</div></div><div class="pattern ${t.faixa ? 'faixa' : t.pattern || 'grid'}"></div>`;
 }
 
-export const DOMMA = raw(`<svg width="22" height="14" viewBox="0 0 44 28" aria-hidden="true"><path d="M2 22 L12 6 L22 20 L32 4 L42 22" fill="none" stroke="#7C83FD" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>`);
+// Logotipo oficial Domma Tecnologia (Design System Domma): versão para fundo escuro e para fundo claro
+export const DOMMA = raw('<img class="domma-logo" src="/brand/domma/logo-fundo-escuro.svg" alt="Domma Tecnologia">');
+export const DOMMA_LIGHT = raw('<img class="domma-logo" src="/brand/domma/logo-fundo-claro.svg" alt="Domma Tecnologia">');

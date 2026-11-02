@@ -15,7 +15,7 @@ npm start
 
 Abra `http://localhost:3000`. Na primeira execução o sistema cria o banco (`storage/`) e, no modo demonstração, gera uma rede fictícia com fotos sintéticas. Isso leva de 2 a 3 minutos.
 
-- **Administrador:** `admin@domma.com.br` / senha `admin123`. O código de verificação (2FA) aparece na própria tela no modo demonstração.
+- **Administrador:** `admin@domma.com.br` / senha `admin123`.
 - **Demais perfis:** entram por link pessoal. Para abrir como outra pessoa, use **Administração → Usuários e perfis → Link** ou **Entrar como**.
 
 Para apagar tudo e recriar a demonstração, rode `npm run reset`.
@@ -27,9 +27,9 @@ Para apagar tudo e recriar a demonstração, rode `npm run reset`.
 | `PORT` | Porta HTTP (padrão 3000) |
 | `BASE_URL` | Endereço público, usado nos links pessoais, no link de consulta e no QR code (ex.: `https://laudo.suaempresa.com.br`) |
 | `DATA_DIR` | Pasta do banco e dos arquivos (padrão `./storage`) |
-| `DEMO_MODE` | `0` desliga a demonstração: sem dados fictícios, sem o código 2FA na tela e sem o simulador de assinatura |
+| `DEMO_MODE` | `0` desliga a demonstração: sem dados fictícios e sem o simulador de assinatura |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Credenciais do primeiro Administrador (com `DEMO_MODE=0` a senha padrão é aleatória e aparece no console) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | E-mail real (código 2FA, links pessoais, avisos). Sem SMTP, as mensagens só ficam registradas e o código 2FA aparece no log do servidor |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | E-mail real (links pessoais e avisos). Sem SMTP, as mensagens só ficam registradas em "Notificações enviadas" |
 
 O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
 
@@ -37,7 +37,7 @@ O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
 
 ## O que está implementado
 
-**Acesso (Seção 3).** O Administrador entra com e-mail, senha e 2FA. Os demais perfis entram por um link pessoal longo, que pode ser revogado. Quem perdeu o link pode pedir outro, e o sistema envia só para os contatos já cadastrados. Há aceite dos termos (LGPD) no primeiro acesso, e o Administrador pode "entrar como" outro perfil, com o registro na auditoria.
+**Acesso (Seção 3).** O Administrador entra com e-mail e senha. Os demais perfis entram por um link pessoal longo, que pode ser revogado. Quem perdeu o link pode pedir outro, e o sistema envia só para os contatos já cadastrados. Há aceite dos termos (LGPD) no primeiro acesso, e o Administrador pode "entrar como" outro perfil, com o registro na auditoria.
 
 **Painel da Franqueadora (13.1–13.4).**
 - Indicadores por status, com filtros de marca, coordenador e município.

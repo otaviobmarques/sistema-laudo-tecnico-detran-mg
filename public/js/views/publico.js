@@ -15,21 +15,17 @@ export function adminLogin() {
       <p class="muted small">O sistema é interno: só o Administrador usa senha. Franqueados, equipe, coordenadores e engenheiros entram pelo link pessoal recebido.</p>
       <form id="f1" class="stack"><div><label class="f">E-mail</label><input name="email" type="email" autocomplete="username" required></div>
       <div><label class="f">Senha</label><input name="password" type="password" autocomplete="current-password" required></div>
-      <button class="btn primary block lg">Continuar</button></form>
-      <form id="f2" class="stack" hidden><div class="note" id="sent"></div><div><label class="f">Código de verificação (6 dígitos)</label><input name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required></div><button class="btn primary block lg">Entrar</button></form>
+      <button class="btn primary block lg">Entrar</button></form>
       <hr><a href="#/pedir-link">Perdi meu link de acesso</a></div>`),
     mount(root) {
-      const f1 = root.querySelector('#f1'), f2 = root.querySelector('#f2');
+      const f1 = root.querySelector('#f1');
       f1.onsubmit = async (e) => {
         e.preventDefault();
         try {
-          const r = await post('/api/auth/admin-login', { email: f1.email.value, password: f1.password.value });
-          f1.hidden = true; f2.hidden = false;
-          root.querySelector('#sent').innerHTML = String(html`Enviamos um código para ${r.sentTo}.${r.demoCode ? html`<br><b>Modo demonstração:</b> código ${r.demoCode}` : ''}`);
-          f2.code.focus();
+          await post('/api/auth/admin-login', { email: f1.email.value, password: f1.password.value });
+          S.me = null; location.hash = '#/';
         } catch (er) { showErr(er); }
       };
-      f2.onsubmit = async (e) => { e.preventDefault(); try { await post('/api/auth/admin-2fa', { code: f2.code.value }); S.me = null; location.hash = '#/'; } catch (er) { showErr(er); } };
     } };
 }
 

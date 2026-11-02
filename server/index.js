@@ -81,29 +81,16 @@ app.get('/a/:token', (req, res) => {
   res.redirect(u.terms_accepted_at ? '/#/' : '/#/primeiro-acesso');
 });
 
+const loginFails = new Map(); // tentativas erradas por IP (proteção contra força bruta)
 app.post('/api/auth/admin-login', (req, res) => {
   const { email, password } = req.body || {};
+  const key = req.ip, f = loginFails.get(key);
+  if (f && f.n >= 10 && Date.now() - f.at < 15 * 60000) throw err(429, 'Muitas tentativas incorretas. Aguarde 15 minutos e tente de novo.');
   const u = one('SELECT * FROM users WHERE lower(email)=lower(?) AND active=1 AND deleted_at IS NULL', String(email || ''));
-  if (!u || !L.isAdmin(u) || !checkPw(String(password || ''), u.password_hash)) { SV.audit({ ...req, publicActor: email }, 'acesso.admin.falha', { after: { email } }); throw err(401, 'E-mail ou senha incorretos.'); }
-  const code = String(crypto.randomInt(100000, 999999));
-  const id = token(24);
-  insert('sessions', { id, user_id: u.id, via: 'senha+2fa', ua: String(req.headers['user-agent'] || '').slice(0, 200), ip: req.ip, created_at: now(), pending_2fa: S({ code, exp: Date.now() + 10 * 60000, tries: 0 }) });
-  const smtp = !!process.env.SMTP_HOST;
-  SV.notify({ channel: smtp ? 'email' : 'sms', to: smtp ? u.email : u.phone || u.email, toName: u.name, subject: 'Código de verificação', body: `Seu código de acesso ao Laudo ECV é ${code}. Válido por 10 minutos.`, kind: '2fa' });
-  if (!smtp && !DEMO) console.log(`[2FA] Sem SMTP configurado — código de acesso de ${u.email}: ${code}`);
-  res.cookie('pending', id, { httpOnly: true, sameSite: 'lax', maxAge: 10 * 60000 });
-  res.json({ ok: true, sentTo: ((process.env.SMTP_HOST ? u.email : u.phone || u.email) || '').replace(/.(?=.{4})/g, '•'), demoCode: DEMO ? code : undefined });
-});
-app.post('/api/auth/admin-2fa', (req, res) => {
-  const s = one('SELECT * FROM sessions WHERE id=?', req.cookies.pending || '');
-  const p = s && J(s.pending_2fa);
-  if (!p || Date.now() > p.exp || p.tries >= 5) throw err(401, 'Código expirado. Entre novamente.');
-  if (String(req.body.code).trim() !== p.code) { p.tries++; update('sessions', s.id, { pending_2fa: S(p) }, 'id'); throw err(401, 'Código incorreto.'); }
-  run('DELETE FROM sessions WHERE id=?', s.id);
-  const u = one('SELECT * FROM users WHERE id=?', s.user_id);
-  newSession(req, res, u, 'senha+2fa');
-  res.clearCookie('pending');
-  req.user = u; req.via = 'senha+2fa';
+  if (!u || !L.isAdmin(u) || !checkPw(String(password || ''), u.password_hash)) { SV.audit({ ...req, publicActor: email }, 'acesso.admin.falha', { after: { email } }); const g = f && Date.now() - f.at < 15 * 60000 ? f : { n: 0 }; loginFails.set(key, { n: g.n + 1, at: Date.now() }); throw err(401, 'E-mail ou senha incorretos.'); }
+  loginFails.delete(key);
+  newSession(req, res, u, 'senha');
+  req.user = u; req.via = 'senha';
   SV.audit(req, 'acesso.admin', { entity: 'user', entityId: u.id });
   res.json({ ok: true });
 });

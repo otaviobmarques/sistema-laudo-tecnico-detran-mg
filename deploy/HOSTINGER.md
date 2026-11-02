@@ -11,4 +11,4 @@ Requisitos: VPS Ubuntu 22.04/24.04, 2 GB de RAM ou mais, e um subdomínio (ex.: 
 5. Backup diário: `crontab -e` e adicione `30 3 * * * /opt/laudo-ecv/deploy/backup.sh`. Copie a pasta `backups/` para fora do servidor (ou ative o backup do VPS no hPanel).
 
 Atualizar para uma nova versão: `cd /opt/laudo-ecv && git pull && docker compose up -d --build`.
-Ver os logs: `docker compose logs -f app`. Sem SMTP configurado, o código 2FA do Administrador aparece nesses logs.
+Ver os logs: `docker compose logs -f app`.

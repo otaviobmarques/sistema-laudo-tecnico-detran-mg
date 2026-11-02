@@ -39,8 +39,8 @@ export const cnpjMask = (c) => String(c || '').replace(/\D/g, '').replace(/^(\d{
 export const cpfMask = (c) => String(c || '').replace(/\D/g, '').replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*/, '$1.$2.$3-$4');
 export const initials = (n) => String(n || '?').split(' ').filter(Boolean).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
 export const daysFrom = (d) => Math.floor((Date.now() - new Date(d)) / 86400000);
-export const roleLabel = { admin: 'Administrador', franqueadora: 'Franqueadora', coordenador: 'Coordenador', rt: 'Responsável técnico', loja: 'Loja', colaborador: 'Colaborador', diretoria: 'Diretoria' };
-export const has = (r) => S.me && S.me.user && S.me.user.roles.includes(r);
+export const roleLabel = { admin: 'Administrador', franqueadora: 'Franqueadora', loja: 'Loja', coordenador: 'Franqueadora', diretoria: 'Franqueadora', rt: 'Responsável técnico', colaborador: 'Loja' };
+export const has = (r) => { if (!S.me || !S.me.user) return false; const rs = S.me.user.roles; if (['coordenador', 'diretoria'].includes(r)) return rs.includes('franqueadora'); if (['rt', 'colaborador'].includes(r)) return false; return rs.includes(r); };
 export const isStoreUser = () => S.me && S.me.stores && S.me.stores.length > 0 && !has('admin') && !has('franqueadora') && !has('coordenador');
 
 export function statusPill(st, label) {
@@ -128,22 +128,30 @@ export const num = (v) => { if (v === '' || v == null) return null; const n = pa
 export const fmtN = (v, d = 2) => (v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }));
 
 // ---------- tema da marca ----------
+// Tema da marca da loja (Direção Visual Auto Visão v1.0 / Royal v1.0)
 export function applyBrand(brand) {
   const b = document.body;
   b.classList.remove('store', 'royal', 'autovisao');
-  if (!brand) { b.style.cssText = ''; return; }
+  ['--brand', '--brand-accent', '--brand-bg', '--brand-text', '--font-brand', '--faixa'].forEach((v) => b.style.removeProperty(v));
+  if (!brand) return;
   const t = brand.theme || {};
-  b.classList.add('store', brand.slug || '');
+  b.classList.add('store', brand.slug || (t.shape === 'chamfer' ? 'royal' : 'autovisao'));
   b.style.setProperty('--brand', t.primary || '#333');
   b.style.setProperty('--brand-accent', t.accent || '#333');
   b.style.setProperty('--brand-bg', t.bg || '#F4F4F4');
   b.style.setProperty('--brand-text', t.headerText || '#fff');
-  b.style.setProperty('--font-brand', t.font ? `"${t.font}", var(--font)` : 'var(--font)');
+  if (t.font) b.style.setProperty('--font-brand', `"${t.font}", var(--font)`);
+  if (t.faixa) b.style.setProperty('--faixa', `url("${t.faixa}")`);
+}
+export function brandLogo(brand, onDark = true) {
+  const t = (brand && brand.theme) || {};
+  if (brand && brand.logo_dark_file && onDark) return html`<img src="/api/brands/${brand.id}/logo" alt="${brand.name}">`;
+  const src = onDark ? t.logoDark : t.logoLight;
+  return src ? html`<img src="${src}" alt="${brand.name}">` : html`<div class="bname">${t.logoText || brand?.name}<small>${t.logoSub || ''}</small></div>`;
 }
 export function brandBar(brand, ctx, menu) {
   const t = (brand && brand.theme) || {};
-  const logo = brand && brand.logo_dark_file ? html`<img src="/api/brands/${brand.id}/logo" alt="${brand.name}">` : html`<div class="bname">${t.logoText || brand?.name}<small>${t.logoSub || ''}</small></div>`;
-  return html`<div class="brandbar">${menu ? html`<button class="burger" aria-label="Menu" style="color:var(--brand-text);margin-left:-6px">☰</button>` : ''}${logo}<div class="ctx">${ctx || ''}</div></div><div class="pattern ${t.pattern || 'grid'}"></div>`;
+  return html`<div class="brandbar">${menu ? html`<button class="burger" aria-label="Menu" style="color:var(--brand-text);margin-left:-6px">☰</button>` : ''}${brandLogo(brand, true)}<div class="ctx">${ctx || ''}</div></div><div class="pattern ${t.faixa ? 'faixa' : t.pattern || 'grid'}"></div>`;
 }
 
 export const DOMMA = raw(`<svg width="22" height="14" viewBox="0 0 44 28" aria-hidden="true"><path d="M2 22 L12 6 L22 20 L32 4 L42 22" fill="none" stroke="#7C83FD" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>`);

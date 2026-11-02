@@ -1,5 +1,5 @@
 // Service worker mínimo: permite "adicionar à tela inicial" e abrir o app sem rede.
-const CACHE = 'laudo-ecv-v1';
+const CACHE = 'projeto-tecnico-v2';
 const SHELL = ['/', '/app.css', '/js/app.js', '/js/core.js', '/js/upload.js', '/js/views/painel.js', '/js/views/loja.js', '/js/views/conf.js', '/js/views/admin.js', '/js/views/publico.js', '/icon.svg'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))); self.clients.claim(); });

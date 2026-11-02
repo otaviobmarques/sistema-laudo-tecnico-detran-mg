@@ -1,4 +1,4 @@
-# Sistema de Laudo Técnico ECV
+# Projeto Técnico DETRAN MG
 
 Sistema web para montar o **Laudo Técnico de Infraestrutura (Anexo II)** e a **Declaração de Requisitos de Equipamentos (Anexo III)** das ECVs das redes **Auto Visão** e **Royal** em Minas Gerais, conforme a **Portaria CET-MG nº 01524/2025** (que altera a Portaria nº 1.290/2023). Implementa a Especificação v2.1.
 
@@ -16,7 +16,8 @@ npm start
 Abra `http://localhost:3000`. Na primeira execução o sistema cria o banco (`storage/`) e, no modo demonstração, gera uma rede fictícia com fotos sintéticas. Isso leva de 2 a 3 minutos.
 
 - **Administrador:** `admin@domma.com.br` / senha `admin123`.
-- **Demais perfis:** entram por link pessoal. Para abrir como outra pessoa, use **Administração → Usuários e perfis → Link** ou **Entrar como**.
+- **Perfis:** só três. **Administrador** (e-mail e senha), **Franqueadora** (cria e exclui lojas, solicita e exclui preenchimentos, valida o laudo e faz a revisão técnica) e **Loja** (preenche). Franqueadora e Loja entram por link pessoal. O sistema não envia e-mail nem WhatsApp: ele gera o link e uma mensagem pronta para a franqueadora copiar e enviar.
+- O **responsável técnico** (engenheiro/arquiteto) é só um cadastro, sem acesso ao sistema. A ART/RRT e o Anexo II assinado por ele são anexados pela loja ou pela franqueadora.
 
 Para apagar tudo e recriar a demonstração, rode `npm run reset`.
 
@@ -29,7 +30,6 @@ Para apagar tudo e recriar a demonstração, rode `npm run reset`.
 | `DATA_DIR` | Pasta do banco e dos arquivos (padrão `./storage`) |
 | `DEMO_MODE` | `0` desliga a demonstração: sem dados fictícios e sem o simulador de assinatura |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Credenciais do primeiro Administrador (com `DEMO_MODE=0` a senha padrão é aleatória e aparece no console) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | E-mail real (links pessoais e avisos). Sem SMTP, as mensagens só ficam registradas em "Notificações enviadas" |
 
 O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
 
@@ -37,10 +37,10 @@ O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
 
 ## O que está implementado
 
-**Acesso (Seção 3).** O Administrador entra com e-mail e senha. Os demais perfis entram por um link pessoal longo, que pode ser revogado. Quem perdeu o link pode pedir outro, e o sistema envia só para os contatos já cadastrados. Há aceite dos termos (LGPD) no primeiro acesso, e o Administrador pode "entrar como" outro perfil, com o registro na auditoria.
+**Acesso (Seção 3).** O Administrador entra com e-mail e senha. Franqueadora e Loja entram por um link pessoal longo, que pode ser revogado. Quem perdeu o link pede outro à franqueadora. Há aceite dos termos (LGPD) no primeiro acesso, e o Administrador pode "entrar como" outro perfil, com o registro na auditoria.
 
 **Painel da Franqueadora (13.1–13.4).**
-- Indicadores por status, com filtros de marca, coordenador e município.
+- Indicadores por status, com filtros de marca e município.
 - Lista "Quem está faltando", com cobrança por loja ou em lote.
 - Alertas de vencimento do credenciamento (180/120/90 dias), de calibração, de links do Drive e de prazos de exigência.
 - Ranking dos motivos de devolução e tempo médio de conferência.
@@ -62,9 +62,9 @@ O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
 
 **Motor de validação (11).** Regras R01–R28 e C01–C13, mais regras de completude. Todos os valores numéricos ficam em parâmetros versionados (B.30).
 
-**Conferência e revisão (10).**
+**Validação e revisão técnica pela franqueadora (10).**
 - Conferência item a item, com motivo padrão, comentário na foto, aceite formal de alertas, "aprovar todos sem alerta" e comparação antes × depois no reenvio.
-- Validação do registro do RT pelo coordenador.
+- Validação do registro do RT pela franqueadora.
 - Revisão do RT com texto-base montado a partir das medidas, declaração de acessibilidade, ART/RRT com checagem do ano e devolução de itens.
 
 **Documentos e assinatura (9.3, 10.3, 10.4, 12).**
@@ -83,7 +83,6 @@ O `Dockerfile` já inclui o poppler e as fontes. Monte um volume em `/data`.
 
 ## O que depende de configuração ou de informação externa
 
-- **WhatsApp e e-mail:** sem provedor configurado, as mensagens são registradas em **Notificações enviadas**. A integração com a API oficial do WhatsApp e com o SMTP de cada marca entra em `server/services.js → notify()` (Seção 18, item 6).
 - **Assinatura gov.br:** o sistema confere a estrutura PKCS#7, o resumo criptográfico, a integridade, o signatário e a versão. Não valida a cadeia ICP-Brasil, ou seja, se o certificado foi emitido pelo ITI/gov.br. Para isso, recomenda-se integrar o validador do ITI antes da produção. O botão "simular assinatura gov.br" existe só no modo demonstração.
 - **Leitura de certificados:** funciona em PDFs com texto (via `pdftotext`). Certificados escaneados como imagem precisam de um OCR (por exemplo, Tesseract), e o sistema avisa quando não consegue ler.
 - **Porte dos municípios:** os 853 municípios de MG estão carregados. As populações da demonstração são aproximadas e só cobrem as cidades maiores. Importe a **lista oficial da CET-MG** e a **tabela do IBGE** em *Administração → Porte dos municípios* (Seção 18, item 1).
@@ -105,3 +104,11 @@ server/
   seed.js        carga inicial e dados de demonstração
 public/          front-end (SPA sem build, responsivo, PWA)
 ```
+
+## Identidade visual das marcas
+
+A área da loja, o checklist e os PDFs seguem a **Direção Visual Auto Visão v1.0** e a **Direção Visual Royal v1.0**, com os logos e as faixas oficiais em `public/brand/`. Auto Visão: vermelho `#ED3237`, preto `#151415`, Nunito + Inter, cantos arredondados, faixa quadriculada. Royal: laranja `#ED712F`, preto `#101419`, off-white `#F7F3E2`, Raleway 900 em caixa alta + Inter, chanfros de 45°, faixa oficial.
+
+## Calibração
+
+Quais equipamentos exigem certificado de calibração fica em **Administração → Parâmetros das regras → Equipamentos**. O padrão segue a especificação v2.1 (paquímetro, profundímetro, trenas de 5 m e 50 m e medidor de espessura). Ajuste conforme a Portaria.

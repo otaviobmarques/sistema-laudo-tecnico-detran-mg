@@ -14,7 +14,11 @@ const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toL
 
 function getParams(version) {
   const row = version ? one('SELECT * FROM params WHERE version=?', version) : one('SELECT * FROM params ORDER BY version DESC LIMIT 1');
-  return row ? { ...J(row.data), _version: row.version } : { ...C.DEFAULT_PARAMS, _version: 0 };
+  const merge = (a, b) => { for (const [k, v] of Object.entries(b || {})) a[k] = v && typeof v === 'object' && !Array.isArray(v) ? merge(a[k] && typeof a[k] === 'object' ? a[k] : {}, v) : v; return a; };
+  const p = merge(JSON.parse(JSON.stringify(C.DEFAULT_PARAMS)), row ? J(row.data, {}) : {});
+  p._version = row ? row.version : 0;
+  C.applyCalibration(p);
+  return p;
 }
 
 function storePorte(store) {

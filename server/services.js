@@ -5,11 +5,7 @@ const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const sharp = require('sharp');
 const { DATA_DIR, one, insert, run, now, S, J } = require('./db');
-// E-mail real via SMTP (ex.: Hostinger: smtp.hostinger.com, porta 465)
-const mailer = process.env.SMTP_HOST ? require('nodemailer').createTransport({
-  host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT || 465), secure: (process.env.SMTP_PORT || '465') === '465',
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-}) : null;
+
 
 const FILES = path.join(DATA_DIR, 'files');
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
@@ -195,22 +191,14 @@ async function testDriveLink(url) {
   }
 }
 
-// ---------- Notificações (e-mail / WhatsApp) ----------
-// Sem provedor configurado, as mensagens ficam na Caixa de saída (tela do Administrador).
+// ---------- Avisos ----------
+// O sistema não envia e-mail nem WhatsApp: os links são copiados e enviados pela própria franqueadora.
+// Os avisos ficam só registrados internamente (histórico).
 function notify({ channel = 'email', to, toName, subject, body, brandId, storeId, laudoId, kind }) {
   if (!to) return null;
   const brand = brandId ? one('SELECT * FROM brands WHERE id=?', brandId) : null;
-  const footer = `\n\n—\n${brand ? brand.name + ' · ' : ''}Laudo ECV · Desenvolvido por Domma Tecnologia`;
-  const isEmail = /@/.test(String(to));
-  const real = !!(mailer && isEmail);
-  const id = insert('outbox', { at: now(), channel: real ? 'email' : channel, to_addr: to, to_name: toName, subject, body: body + footer, brand_id: brandId, store_id: storeId, laudo_id: laudoId, kind, status: real ? 'enviando' : 'registrado (sem provedor)' });
-  if (process.env.LOG_NOTIFY) console.log(`[${channel}] → ${to}: ${subject}`);
-  if (real) {
-    const sender = brand ? JSON.parse(brand.sender || '{}') : {};
-    mailer.sendMail({ from: `"${sender.name || (brand ? brand.name : 'Laudo ECV')}" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`, replyTo: sender.email || undefined, to, subject, text: body + footer })
-      .then(() => run("UPDATE outbox SET status='enviado' WHERE id=?", id))
-      .catch((e) => { run('UPDATE outbox SET status=? WHERE id=?', 'falhou: ' + String(e.message).slice(0, 120), id); console.error('SMTP', e.message); });
-  }
+  const footer = `\n\n—\n${brand ? brand.name + ' · ' : ''}Projeto Técnico DETRAN MG · Desenvolvido por Domma Tecnologia`;
+  const id = insert('outbox', { at: now(), channel, to_addr: to, to_name: toName, subject, body: body + footer, brand_id: brandId, store_id: storeId, laudo_id: laudoId, kind, status: 'registrado' });
   return id;
 }
 

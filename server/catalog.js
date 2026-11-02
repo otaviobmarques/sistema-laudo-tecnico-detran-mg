@@ -21,6 +21,9 @@ const DEFAULT_PARAMS = {
   },
   equipamentos: {
     cameraResolucao: [800, 600], servidorRam: 8, servidorDisco: 1, nobreakVA: 800, uploadMbps: 1,
+    // Quais equipamentos exigem certificado de calibração (ajustável em Parâmetros, conforme a Portaria)
+    calibracao: { elevacao: false, camera_fixa: false, boroscopio: false, smartphone: false, paquimetro: true, profundimetro: true,
+      trena5: true, trena50: true, engate: false, espessura: true, lanterna_uv: false, servidor: false, nobreak: false, roteador: false },
   },
   calibracao: { validadeMeses: 12, alertaDias: 30 },
   arquivos: {
@@ -78,19 +81,19 @@ const A3 = [
   { key: 'a3_4', n: 4, title: 'Tablet ou smartphone', short: 'Smartphone', eqType: 'smartphone', perBox: true, serial: true, video: true,
     req: 'App de vistoria instalado e configurado; vídeo de tela por aparelho.' },
   { key: 'a3_5', n: 5, title: 'Paquímetro digital', short: 'Paquímetro', eqType: 'paquimetro', serial: true, cal: true, faixaMin: 150,
-    req: 'Com certificado de calibração.' },
+    reqBase: 'Paquímetro digital.' },
   { key: 'a3_6', n: 6, title: 'Profundímetro digital', short: 'Profundímetro', eqType: 'profundimetro', perBox: true, serial: true, cal: true,
-    req: 'Com certificado de calibração.' },
+    reqBase: 'Profundímetro digital (foto ligado).' },
   { key: 'a3_7', n: 7, title: 'Trena de 5 m', short: 'Trena 5 m', eqType: 'trena5', perBox: true, serial: true, cal: true, faixaMin: 5000,
-    req: 'Com certificado de calibração; faixa de medição até 5 m.' },
+    reqBase: 'Trena com escala de 5 m.' },
   { key: 'a3_8', n: 8, title: 'Trena de 50 m', short: 'Trena 50 m', eqType: 'trena50', perBox: true, serial: true, cal: true, faixaMin: 50000,
-    req: 'Com certificado de calibração; faixa de medição até 50 m.' },
+    reqBase: 'Trena com escala de 50 m.' },
   { key: 'a3_9', n: 9, title: 'Leitor biométrico facial', short: 'Biometria', eqType: null,
     req: 'Atendido pelo reconhecimento facial integrado ao sistema de vistoria (sem aparelho separado). Anexar print ou vídeo da função.' },
   { key: 'a3_10', n: 10, title: 'Verificador de conexões elétricas (engate)', short: 'Engate', eqType: 'engate', serial: true,
     req: 'Conforme Resolução CONTRAN nº 937/2022.' },
   { key: 'a3_11', n: 11, title: 'Medidor de espessura de camadas', short: 'Espessura', eqType: 'espessura', serial: true, cal: true,
-    req: 'Base ferrosa e não ferrosa; com certificado de calibração.' },
+    reqBase: 'Base ferrosa e não ferrosa.' },
   { key: 'a3_12', n: 12, title: 'Lanterna UV', short: 'Lanterna UV', eqType: 'lanterna_uv', perBox: true, serial: false, req: 'Foto com a lanterna ligada.' },
   { key: 'a3_13', n: 13, title: 'Computador servidor (desktop)', short: 'Servidor', eqType: 'servidor', serial: true,
     req: 'Core i5 ou similar, 8 GB RAM, 1 TB; uso exclusivo.' },
@@ -116,6 +119,19 @@ const DOCS = [
   { kind: 'contrato_internet', title: 'Contrato de internet (upload ≥ 1 Mb/s)', who: 'loja', note: 'Item 17 do Anexo III.' },
   { kind: 'incendio', title: 'Documentos de prevenção e combate a incêndio', who: 'loja', note: 'Ex.: AVCB/CLCB, recarga de extintores — confirmar com o RT.' },
 ];
+
+// Aplica a tabela de calibração dos parâmetros ao catálogo (it.cal)
+function applyCalibration(P) {
+  const cal = (P && P.equipamentos && P.equipamentos.calibracao) || DEFAULT_PARAMS.equipamentos.calibracao;
+  const upd = (it) => {
+    if (!it.eqType) return;
+    it.cal = !!cal[it.eqType];
+    if (it.reqBase === undefined) it.reqBase = it.req;
+    it.req = it.reqBase + (it.cal ? ' Com certificado de calibração.' : '');
+  };
+  A3.forEach(upd); ALL_ITEMS.forEach(upd);
+}
+applyCalibration(DEFAULT_PARAMS);
 
 function porteFromPop(pop, p = DEFAULT_PARAMS) {
   if (pop == null) return null;
@@ -211,5 +227,5 @@ function equipmentPhotoSlots(type) {
 
 module.exports = {
   DEFAULT_PARAMS, PORTE_LABEL, PROCESS_TYPES, A2, A3, ALL_ITEMS, ITEM, EQ_TYPES, ELEVACAO, DOCS,
-  porteFromPop, quantities, boxesList, boxLabel, itemsInScope, photoSlots, equipmentPhotoSlots,
+  porteFromPop, applyCalibration, quantities, boxesList, boxLabel, itemsInScope, photoSlots, equipmentPhotoSlots,
 };

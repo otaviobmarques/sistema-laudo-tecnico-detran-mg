@@ -29,6 +29,9 @@ const POP = {
   'Ouro Preto': [74821, 76963], 'Janaúba': [70699, 73013], 'Formiga': [68248, 70402], 'Campanha': [16348, 16832], 'Três Pontas': [55255, 57364],
 };
 
+// Tokens oficiais (Direção Visual Auto Visão v1.0 e Royal v1.0) e arquivos oficiais de logo e faixa
+const BRAND_THEMES = { autovisao: { primary: '#ED3237', primaryDark: '#C9232C', accent: '#ED3237', bg: '#F6F4F5', surface: '#FFFFFF', text: '#151415', muted: '#696267', line: '#DED8DC', headerText: '#FFFFFF', pattern: 'grid', shape: 'round', upper: false, logoText: 'autovisão', logoSub: 'VISTORIAS AUTOMOTIVAS', codePrefix: 'AV', font: 'Nunito', bodyFont: 'Inter', logoDark: '/brand/autovisao/logo-fundo-escuro.png', logoLight: '/brand/autovisao/logo-fundo-claro.png', faixa: '/brand/autovisao/faixa.png' }, royal: { primary: '#101419', primaryDark: '#1B2027', accent: '#ED712F', bg: '#F7F3E2', surface: '#FFFFFF', text: '#101419', muted: '#575B62', line: '#D9D4C2', headerText: '#F7F3E2', pattern: 'angular', shape: 'chamfer', upper: true, logoText: 'ROYAL', logoSub: 'VISTORIAS AUTOMOTIVAS', codePrefix: 'RY', font: 'Raleway', bodyFont: 'Inter', logoDark: '/brand/royal/logo-fundo-escuro.png', logoLight: '/brand/royal/logo-fundo-claro.png', faixa: '/brand/royal/faixa.png' } };
+
 function genCpf(seed) {
   let n = String(100000000 + ((seed * 7919) % 899999999)).slice(0, 9).split('').map(Number);
   for (const t of [9, 10]) { const s = n.reduce((a, d, i) => a + d * (t + 1 - i), 0); n.push(((s * 10) % 11) % 10); }
@@ -179,12 +182,17 @@ async function ensureSeed() {
     for (const l of lines) { const [ibge, name] = l.split('\t'); const p = POP[name] || [null, null]; insert('municipalities', { ibge, name, pop2022: p[0], pop2024: p[1] }); }
   }
   if (!one('SELECT COUNT(*) n FROM params').n) insert('params', { version: 1, label: 'Portaria CET-MG nº 01524/2025 (inicial)', data: S(C.DEFAULT_PARAMS), created_at: now() });
+  for (const b of all('SELECT * FROM brands')) {
+    const off = BRAND_THEMES[b.slug];
+    const t = J(b.theme, {});
+    if (off && !t.dsVersion) update('brands', b.id, { theme: S({ ...t, ...off, dsVersion: '1.0' }) });
+  }
   if (one('SELECT COUNT(*) n FROM brands').n) return;
 
   const av = insert('brands', { slug: 'autovisao', name: 'Auto Visão', tagline: 'Vistorias Automotivas', created_at: now(), sender: S({ name: 'Auto Visão Vistorias', email: 'laudos@autovisao.com.br' }),
-    theme: S({ primary: '#F20C1F', primaryDark: '#BF1515', accent: '#F20C1F', bg: '#F4F4F4', text: '#1A1A1A', headerText: '#FFFFFF', pattern: 'grid', shape: 'round', upper: false, logoText: 'autovisão', logoSub: 'VISTORIAS AUTOMOTIVAS', codePrefix: 'AV', font: 'Nunito' }) });
+    theme: S({ ...BRAND_THEMES.autovisao, dsVersion: '1.0' }) });
   const ry = insert('brands', { slug: 'royal', name: 'Royal', tagline: 'Vistorias Automotivas', created_at: now(), sender: S({ name: 'Royal Vistorias', email: 'laudos@royalvistorias.com.br' }),
-    theme: S({ primary: '#101419', primaryDark: '#1E242C', accent: '#ED712F', bg: '#F7F3E2', text: '#101419', headerText: '#F7F3E2', pattern: 'angular', shape: 'chamfer', upper: true, logoText: 'ROYAL', logoSub: 'VISTORIAS AUTOMOTIVAS', codePrefix: 'RY', font: 'Raleway' }) });
+    theme: S({ ...BRAND_THEMES.royal, dsVersion: '1.0' }) });
 
   const adminPw = process.env.ADMIN_PASSWORD || (DEMO ? 'admin123' : crypto.randomBytes(9).toString('base64url'));
   const admin = insert('users', { name: 'Administrador Domma', email: process.env.ADMIN_EMAIL || 'admin@domma.com.br', phone: '(31) 99999-0000', roles: S(['admin']), token: token(), password_hash: hashPw(adminPw), active: 1, created_at: now(), terms_accepted_at: now() });
@@ -192,14 +200,11 @@ async function ensureSeed() {
   if (!DEMO) return;
 
   const U = (name, roles, extra = {}) => insert('users', { name, roles: S(roles), token: token(), active: 1, created_at: now(), terms_accepted_at: now(), ...extra });
-  const alexandre = U('Alexandre Souza', ['franqueadora', 'coordenador'], { email: 'alexandre@franqueadora.com.br', phone: '(31) 98888-1001' });
+  const alexandre = U('Alexandre Souza', ['franqueadora'], { email: 'alexandre@franqueadora.com.br', phone: '(31) 98888-1001' });
   const petala = U('Pétala Ramos', ['franqueadora'], { email: 'petala@franqueadora.com.br', phone: '(31) 98888-1002' });
-  const marina = U('Marina Lopes', ['coordenador'], { email: 'marina@franqueadora.com.br', phone: '(31) 98888-1003', scope: S({ brands: [ry] }) });
-  U('Diretoria', ['diretoria'], { email: 'diretoria@franqueadora.com.br' });
-  const rtU1 = U('Venilton J. Borges', ['rt'], { email: 'venilton@engenharia.com.br', phone: '(35) 97777-2001', cpf: genCpf(11) });
-  const rtU2 = U('Ana Paula Rezende', ['rt'], { email: 'ana@arquitetura.com.br', phone: '(35) 97777-2002', cpf: genCpf(12) });
-  const rt1 = insert('rts', { user_id: rtU1, name: 'Venilton J. Borges', cpf: genCpf(11), council: 'CREA', reg_number: 'MG0000034311D', uf: 'MG', email: 'venilton@engenharia.com.br', phone: '(35) 97777-2001', validated_by: alexandre, validated_at: now(), created_at: now() });
-  const rt2 = insert('rts', { user_id: rtU2, name: 'Ana Paula Rezende', cpf: genCpf(12), council: 'CAU', reg_number: 'A123456-7', uf: 'MG', email: 'ana@arquitetura.com.br', phone: '(35) 97777-2002', created_at: now() });
+  const marina = alexandre;
+  const rt1 = insert('rts', { user_id: null, name: 'Venilton J. Borges', cpf: genCpf(11), council: 'CREA', reg_number: 'MG0000034311D', uf: 'MG', email: 'venilton@engenharia.com.br', phone: '(35) 97777-2001', validated_by: alexandre, validated_at: now(), created_at: now() });
+  const rt2 = insert('rts', { user_id: null, name: 'Ana Paula Rezende', cpf: genCpf(12), council: 'CAU', reg_number: 'A123456-7', uf: 'MG', email: 'ana@arquitetura.com.br', phone: '(35) 97777-2002', created_at: now() });
 
   const mun = (n) => one('SELECT ibge FROM municipalities WHERE name=?', n).ibge;
   const stores = [

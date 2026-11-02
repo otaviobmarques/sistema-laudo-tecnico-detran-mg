@@ -21,7 +21,6 @@ const routes = [
   [/^\/importar$/, P.importStores],
   [/^\/solicitar$/, P.requestFill],
   [/^\/matriz$/, P.matrix],
-  [/^\/notificacoes$/, P.outbox],
   [/^\/relatorios$/, P.reports],
   [/^\/loja$/, LJ.storePicker],
   [/^\/laudo\/(\d+)$/, LJ.home],
@@ -36,12 +35,10 @@ const routes = [
   [/^\/laudo\/(\d+)\/versoes$/, LJ.versions],
   [/^\/laudo\/(\d+)\/historico$/, LJ.timeline],
   [/^\/laudo\/(\d+)\/equipamentos$/, LJ.equipment],
-  [/^\/laudo\/(\d+)\/equipe$/, LJ.team],
   [/^\/laudo\/(\d+)\/rts$/, LJ.rtsView],
   [/^\/fila$/, CF.queue],
   [/^\/fila\/(devolvidos|aprovados)$/, CF.queue],
   [/^\/conferencia\/(\d+)$/, CF.review],
-  [/^\/rt$/, CF.rtList],
   [/^\/revisao\/(\d+)$/, CF.rtReview],
   [/^\/admin\/marcas$/, AD.brands],
   [/^\/admin\/usuarios$/, AD.users],
@@ -54,41 +51,35 @@ const routes = [
 
 async function home() {
   if (!S.me.user) return go('/login');
-  if (has('admin') || has('franqueadora') || has('diretoria')) return go('/painel');
-  if (has('coordenador')) return go('/fila');
-  if (has('rt') && !S.me.stores.length) return go('/rt');
+  if (has('admin') || has('franqueadora')) return go('/painel');
   return go('/loja');
 }
 export const go = (p) => { if (location.hash === '#' + p) render(); else location.hash = '#' + p; return { redirect: true }; };
 
 // --------- navegação lateral ---------
+// Perfis: Administrador, Franqueadora (cria lojas, analisa e valida) e Loja (preenche).
 function navItems(ctx) {
   const items = [];
   const sec = (t) => items.push({ sec: t });
   const it = (href, label, count) => items.push({ href, label, count });
   if (ctx && ctx.laudoId && (isStoreUser() || ctx.storeMode)) {
     const id = ctx.laudoId;
-    sec('Minha loja');
+    sec(isStoreUser() ? 'Minha loja' : 'Loja');
     it(`/laudo/${id}`, 'Início'); it(`/laudo/${id}/dados`, 'Dados do processo'); it(`/laudo/${id}/checklist`, 'Checklist');
     it(`/laudo/${id}/anexo2`, 'Anexo II · Infraestrutura'); it(`/laudo/${id}/anexo3`, 'Anexo III · Equipamentos'); it(`/laudo/${id}/documentos`, 'Documentos');
-    it(`/laudo/${id}/envio`, 'Envio para conferência'); it(`/laudo/${id}/assinatura`, 'Assinatura e protocolo');
+    it(`/laudo/${id}/envio`, 'Envio para validação'); it(`/laudo/${id}/assinatura`, 'Assinatura e protocolo');
     sec('Cadastros');
-    it(`/laudo/${id}/equipamentos`, 'Equipamentos da loja'); it(`/laudo/${id}/rts`, 'Responsáveis técnicos'); it(`/laudo/${id}/equipe`, 'Equipe'); it(`/laudo/${id}/versoes`, 'Versões e consulta');
-    if (S.me.stores.length > 1) it('/loja', 'Trocar de loja');
-    if (!isStoreUser()) { sec('Voltar'); it(has('rt') ? '/rt' : '/painel', 'Painel'); }
+    it(`/laudo/${id}/equipamentos`, 'Equipamentos da loja'); it(`/laudo/${id}/rts`, 'Responsável técnico'); it(`/laudo/${id}/versoes`, 'Versões e consulta');
+    if (isStoreUser() && S.me.stores.length > 1) it('/loja', 'Trocar de loja');
+    if (!isStoreUser()) { sec('Franqueadora'); it(`/conferencia/${id}`, 'Validar este laudo'); it('/painel', 'Voltar ao painel'); }
     return items;
   }
-  if (has('franqueadora') || has('admin') || has('diretoria')) {
-    sec('Painel'); it('/painel', 'Visão geral'); if (!has('diretoria') || has('franqueadora') || has('admin')) it('/lojas', 'Lojas');
-    if (has('franqueadora') || has('admin')) it('/solicitar', 'Solicitar preenchimento');
+  if (has('franqueadora') || has('admin')) {
+    sec('Painel'); it('/painel', 'Visão geral'); it('/lojas', 'Lojas'); it('/solicitar', 'Solicitar preenchimento');
     it('/matriz', 'Matriz de pendências'); it('/relatorios', 'Relatórios');
-    if (has('franqueadora') || has('admin')) it('/notificacoes', 'Notificações enviadas');
+    sec('Validação'); it('/fila', 'Fila de validação'); it('/fila/devolvidos', 'Devolvidos à loja'); it('/fila/aprovados', 'Validados');
   }
-  if (has('coordenador') || has('admin')) { sec('Conferência'); it('/fila', 'Fila de conferência'); it('/fila/devolvidos', 'Laudos devolvidos'); it('/fila/aprovados', 'Aprovados'); }
-  if (has('coordenador') && !has('franqueadora') && !has('admin')) { sec('Painel'); it('/painel', 'Visão geral'); it('/matriz', 'Matriz de pendências'); }
-  if (has('rt')) { sec('Responsável técnico'); it('/rt', 'Meus laudos'); }
-  if (S.me.stores.length && !isStoreUser()) { sec('Loja'); it('/loja', 'Área da loja'); }
-  if (has('admin')) { sec('Administração'); it('/admin/marcas', 'Marcas'); it('/admin/usuarios', 'Usuários e perfis'); it('/admin/parametros', 'Parâmetros das regras'); it('/admin/porte', 'Porte dos municípios'); it('/admin/auditoria', 'Auditoria e logs'); it('/admin/lixeira', 'Lixeira'); }
+  if (has('admin')) { sec('Administração'); it('/admin/marcas', 'Marcas'); it('/admin/usuarios', 'Usuários'); it('/admin/parametros', 'Parâmetros das regras'); it('/admin/porte', 'Porte dos municípios'); it('/admin/auditoria', 'Auditoria e logs'); it('/admin/lixeira', 'Lixeira'); }
   sec('Sistema'); it('/sobre', 'Sobre o sistema');
   return items;
 }
@@ -105,14 +96,14 @@ function layout(view, ctx) {
   return html`
   <div class="shell">
     <aside class="side">
-      <div class="logo"><i></i>Laudo ECV</div>
+      <div class="logo"><i></i>Projeto Técnico<br>DETRAN MG</div>
       ${sideNav}
       <div class="grow"></div>
       <div class="dev">Desenvolvido por<b>${DOMMA} Domma</b></div>
     </aside>
     <div class="main">
       ${!S.online ? html`<div class="offline">Sem internet — as fotos tiradas ficam guardadas neste aparelho e sobem quando a conexão voltar. Mantenha a página aberta.</div>` : ''}
-      ${onStore ? html`<div class="hide-d" style="position:sticky;top:0;z-index:30">${brandBar(brand, html`${ctx.storeName || ''}<br>${view.title || ''}`, true)}</div>` : ''}
+      ${onStore ? html`<div class="brandwrap">${brandBar(brand, html`${ctx.storeName || ''}<br>${view.title || ''}`, true)}</div>` : ''}
       <header class="topbar">
         <button class="burger" aria-label="Menu">☰</button>
         <h1>${view.title || ''}</h1>
@@ -143,7 +134,7 @@ export async function render() {
   try {
     const view = await match.fn(...match.params);
     if (seq !== renderSeq || !view || view.redirect) return;
-    document.title = (view.title ? view.title + ' · ' : '') + 'Laudo ECV';
+    document.title = (view.title ? view.title + ' · ' : '') + 'Projeto Técnico DETRAN MG';
     if (match.opt.bare || view.bare) { applyBrand(view.brand || null); app.innerHTML = String(view.body); }
     else app.innerHTML = String(layout(view, view.ctx));
     const root = document.getElementById('view') || app;

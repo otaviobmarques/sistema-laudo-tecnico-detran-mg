@@ -25,7 +25,7 @@ function themeOf(brand) {
   const t = J(brand && brand.theme, {});
   return {
     primary: '#333333', accent: '#333333', bg: '#F4F4F4', text: '#1A1A1A', headerText: '#FFFFFF',
-    pattern: 'grid', shape: 'round', upper: false, logoText: brand ? brand.name : 'Laudo ECV', logoSub: 'VISTORIAS AUTOMOTIVAS', ...t,
+    pattern: 'grid', shape: 'round', upper: false, logoText: brand ? brand.name : 'Projeto Técnico DETRAN MG', logoSub: 'VISTORIAS AUTOMOTIVAS', ...t,
   };
 }
 
@@ -37,7 +37,26 @@ function newDoc(meta) {
 }
 
 // ----- Grafismos de marca -----
+const PUB = path.join(__dirname, '..', 'public');
+const assetCache = {};
+function brandAsset(rel) {
+  if (!rel) return null;
+  if (assetCache[rel] !== undefined) return assetCache[rel];
+  const f = path.join(PUB, rel.replace(/^\//, ''));
+  let v = null;
+  try { const buf = fs.readFileSync(f); const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20); v = { buf, w, h }; } catch {}
+  return (assetCache[rel] = v);
+}
 function drawPattern(doc, T, y, h, seed = 7) {
+  // faixa oficial da marca (arquivo), repetida na horizontal
+  const fx = brandAsset(T.faixa);
+  if (fx) {
+    const tw = h * (fx.w / fx.h);
+    doc.save().rect(0, y, A4.w, h).clip();
+    for (let x = 0; x < A4.w; x += tw) doc.image(fx.buf, x, y, { width: tw, height: h });
+    doc.restore();
+    return;
+  }
   if (T.pattern === 'angular') {
     doc.save().rect(0, y, A4.w, h).fill(T.bg);
     const n = 4, seg = A4.w / n;
@@ -63,6 +82,8 @@ function drawPattern(doc, T, y, h, seed = 7) {
 function drawLogo(doc, brand, T, x, y, onDark = true) {
   const file = brand && (onDark ? brand.logo_dark_file : brand.logo_file);
   if (file) { try { doc.image(readFile(file), x, y, { fit: [150, 40] }); return; } catch {} }
+  const off = brandAsset(onDark ? T.logoDark : T.logoLight);
+  if (off) { doc.image(off.buf, x, y - 6, { fit: [150, 46], valign: 'center' }); return; }
   doc.fillColor(onDark ? T.headerText : T.primary).font('Bold').fontSize(T.upper ? 20 : 21).text(T.logoText, x, y, { lineBreak: false });
   doc.font('Body').fontSize(5.8).fillColor(onDark ? T.headerText : T.text).text(T.logoSub, x + 1, y + 26, { characterSpacing: 1.2, lineBreak: false });
 }
@@ -284,7 +305,7 @@ function orientationPage(doc, ctx, annexLabel) {
   doc.moveDown(0.5);
   const brandText = ctx.brand && ctx.brand.orientation_text;
   doc.font('Body').fontSize(8).fillColor(T.text).text(brandText ||
-    `Este documento (${annexLabel}) foi gerado pelo Sistema de Laudo Técnico ECV no padrão da ${PORTARIA}. Em razão do limite de 3 MB do SCE, as fotos estão comprimidas neste PDF. As fotos originais em alta resolução, os vídeos das câmeras e do aplicativo de vistoria, os certificados de calibração e a ART/RRT estão disponíveis no link de consulta desta versão, acessível também pelo QR code no rodapé de cada página.`, { width: CW, lineGap: 2 });
+    `Este documento (${annexLabel}) foi gerado pelo sistema Projeto Técnico DETRAN MG no padrão da ${PORTARIA}. Em razão do limite de 3 MB do SCE, as fotos estão comprimidas neste PDF. As fotos originais em alta resolução, os vídeos das câmeras e do aplicativo de vistoria, os certificados de calibração e a ART/RRT estão disponíveis no link de consulta desta versão, acessível também pelo QR code no rodapé de cada página.`, { width: CW, lineGap: 2 });
   doc.moveDown(0.8);
   dataGrid(doc, T, [[['Laudo', ctx.versionCode || ctx.laudo.code], ['Versão', ctx.versionN ? 'v' + ctx.versionN : 'prévia (não vigente)']], [['Unidade', (ctx.data.empresa?.fantasia) || ctx.store.fantasia], ['Processo', C.PROCESS_TYPES[ctx.laudo.process_type]]]]);
   sectionTitle(doc, T, 'Link de consulta');

@@ -33,20 +33,20 @@ export async function brands() {
 
 export async function users() {
   const [list, stores] = await Promise.all([get('/api/users'), get('/api/stores')]);
-  const ROLES = ['admin', 'franqueadora', 'coordenador', 'rt', 'loja', 'colaborador', 'diretoria'];
+  const ROLES = ['admin', 'franqueadora', 'loja'];
   const form = (u = {}) => html`<form id="uf" class="stack"><div class="grid g3"><div><label class="f">Nome</label><input name="name" value="${u.name || ''}" required></div><div><label class="f">E-mail</label><input name="email" value="${u.email || ''}"></div><div><label class="f">WhatsApp</label><input name="phone" value="${u.phone || ''}"></div></div>
     <div><label class="f">Perfis</label>${ROLES.map((r) => html`<label class="check"><input type="checkbox" name="roles" data-multi="1" value="${r}" ${(u.roles || []).includes(r) ? 'checked' : ''}> ${roleLabel[r]}</label>`)}</div>
-    <div><label class="f">Escopo — marcas (franqueadora/coordenador)</label>${S.me.brands.map((b) => html`<label class="check"><input type="checkbox" name="scope.brands" data-multi="1" value="${b.id}" ${(u.scope?.brands || []).includes(b.id) ? 'checked' : ''}> ${b.name}</label>`)}<div class="hint">Vazio = todas as marcas.</div></div>
-    <div><label class="f">Escopo — lojas específicas (coordenador)</label><select name="scope.stores" multiple size="5" style="height:auto">${stores.map((s) => html`<option value="${s.id}" ${(u.scope?.stores || []).includes(s.id) ? 'selected' : ''}>${s.fantasia}</option>`)}</select></div>
+    <div><label class="f">Escopo — marcas (franqueadora)</label>${S.me.brands.map((b) => html`<label class="check"><input type="checkbox" name="scope.brands" data-multi="1" value="${b.id}" ${(u.scope?.brands || []).includes(b.id) ? 'checked' : ''}> ${b.name}</label>`)}<div class="hint">Vazio = todas as marcas.</div></div>
+
     <div><label class="f">Senha (somente Administrador)</label><input name="password" type="password" placeholder="${u.hasPassword ? 'manter a atual' : ''}"></div></form>`;
-  const collect = (m) => { const v = readForm(m.querySelector('#uf')); v.scope = { brands: (v.scope?.brands || []).map(Number), stores: [...m.querySelectorAll('[name="scope.stores"] option:checked')].map((o) => +o.value) }; if (!v.password) delete v.password; return v; };
+  const collect = (m) => { const v = readForm(m.querySelector('#uf')); v.scope = { brands: (v.scope?.brands || []).map(Number) }; if (!v.password) delete v.password; return v; };
   return {
-    title: 'Usuários e perfis',
+    title: 'Usuários',
     actions: html`<button class="btn primary" id="novo">+ Novo usuário</button>`,
     body: html`<div class="row" style="margin-bottom:12px"><input id="q" placeholder="Buscar" style="max-width:300px"><select id="fr" style="max-width:200px"><option value="">Todos os perfis</option>${ROLES.map((r) => html`<option value="${r}">${roleLabel[r]}</option>`)}</select></div>
     <div class="card pad0"><div class="tablewrap"><table class="t resp"><thead><tr><th>Nome</th><th>Perfis</th><th>Escopo / lojas</th><th>Contato</th><th>Último acesso</th><th>Situação</th><th></th></tr></thead><tbody>
     ${list.map((u) => html`<tr data-s="${(u.name + ' ' + (u.email || '')).toLowerCase()}" data-r="${u.roles.join(' ')}"><td data-l="Nome"><b>${u.name}</b></td><td data-l="Perfis">${u.roles.map((r) => html`<span class="pill">${roleLabel[r]}</span> `)}</td>
-      <td data-l="Escopo" class="small">${u.stores.map((s) => s.fantasia).join(', ') || (u.scope?.brands?.length ? 'Marcas: ' + u.scope.brands.map((b) => S.me.brands.find((x) => x.id === b)?.name).join(', ') : u.roles.some((r) => ['franqueadora', 'coordenador', 'diretoria'].includes(r)) ? 'Todas as marcas' : '—')}</td>
+      <td data-l="Escopo" class="small">${u.stores.map((s) => s.fantasia).join(', ') || (u.scope?.brands?.length ? 'Marcas: ' + u.scope.brands.map((b) => S.me.brands.find((x) => x.id === b)?.name).join(', ') : u.roles.includes('franqueadora') ? 'Todas as marcas' : '—')}</td>
       <td data-l="Contato" class="small">${[u.email, u.phone].filter(Boolean).join(' · ')}</td><td data-l="Último acesso" class="small">${fmtDT(u.last_access_at)}</td><td data-l="Situação">${u.active ? html`<span class="pill ok">ativo</span>` : html`<span class="pill err">inativo</span>`}</td>
       <td class="nowrap"><button class="btn sm" data-ed="${u.id}">Editar</button>${u.link ? html` <button class="btn sm" data-link="${u.link}">Link</button> <button class="btn sm" data-as="${u.id}" title="Agir em nome deste perfil">Entrar como</button>` : ''}</td></tr>`)}
     </tbody></table></div></div>`,
@@ -70,6 +70,8 @@ const PARAM_LABELS = {
   'prazos.renovacaoAntecedenciaDias': 'Renovação até X dias antes (art. 36)', 'prazos.renovacaoAutoDias': 'Criar renovação automática X dias antes', 'prazos.lembreteParadoDias': 'Lembrete de laudo parado (dias)', 'prazos.lembreteAssinaturaDias': 'Lembrete de assinatura (dias)',
   'equipamentos.servidorRam': 'Servidor — RAM mínima (GB)', 'equipamentos.servidorDisco': 'Servidor — disco mínimo (TB)', 'equipamentos.nobreakVA': 'Nobreak mínimo (VA)', 'equipamentos.uploadMbps': 'Internet — upload mínimo (Mb/s)',
 };
+const EQ_NAMES = { elevacao: 'Equipamento de elevação', camera_fixa: 'Câmera fixa', boroscopio: 'Câmera móvel (boroscópio)', smartphone: 'Tablet/smartphone', paquimetro: 'Paquímetro digital', profundimetro: 'Profundímetro digital', trena5: 'Trena de 5 m', trena50: 'Trena de 50 m', engate: 'Verificador de engate', espessura: 'Medidor de espessura de camadas', lanterna_uv: 'Lanterna UV', servidor: 'Computador servidor', nobreak: 'Nobreak', roteador: 'Roteador' };
+for (const [k, n] of Object.entries(EQ_NAMES)) PARAM_LABELS['equipamentos.calibracao.' + k] = 'Exige certificado de calibração — ' + n;
 function flatten(o, p = '') { const out = {}; for (const [k, v] of Object.entries(o)) { if (k.startsWith('_')) continue; const key = p ? p + '.' + k : k; if (v && typeof v === 'object' && !Array.isArray(v)) Object.assign(out, flatten(v, key)); else out[key] = v; } return out; }
 export async function params() {
   const d = await get('/api/admin/params');
@@ -80,7 +82,7 @@ export async function params() {
   return {
     title: 'Parâmetros das regras',
     body: html`<div class="note" style="margin-bottom:12px">Os valores do motor de validação ficam aqui, nunca no código. Salvar cria uma <b>nova versão</b>: laudos já em andamento continuam na versão em que nasceram. Versão atual: <b>v${d.current._version}</b>.</div>
-    <form id="pf">${Object.entries(groups).map(([g, rows]) => html`<div class="card"><h3>${gl[g] || g}</h3><div class="grid g3">${rows.map(([k, v]) => html`<div><label class="f">${PARAM_LABELS[k] || k.split('.').slice(1).join(' › ')}</label><input name="${k}" value="${Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'sim' : 'não') : v}" data-t="${Array.isArray(v) ? 'arr' : typeof v}"></div>`)}</div></div>`)}
+    <form id="pf">${Object.entries(groups).map(([g, rows]) => html`<div class="card"><h3>${gl[g] || g}</h3><div class="grid g3">${rows.map(([k, v]) => html`<div><label class="f">${PARAM_LABELS[k] || k.split('.').slice(1).join(' › ')}</label>${typeof v === 'boolean' ? html`<select name="${k}" data-t="boolean"><option value="sim" ${v ? 'selected' : ''}>Sim</option><option value="não" ${v ? '' : 'selected'}>Não</option></select>` : html`<input name="${k}" value="${Array.isArray(v) ? v.join(', ') : v}" data-t="${Array.isArray(v) ? 'arr' : typeof v}">`}</div>`)}</div></div>`)}
     <div class="card row"><input id="lab" placeholder="Nome da versão (ex.: Portaria CET-MG nº XXXX/2026)" style="max-width:420px"><button class="btn primary">Salvar como nova versão</button></div></form>
     <div class="card"><h3>Histórico de versões</h3>${d.versions.map((v) => html`<div class="list-item"><b>v${v.version}</b><span style="flex:1">${v.label}</span><span class="small muted">${fmtDT(v.created_at)}</span></div>`)}</div>`,
     mount(root) {
@@ -155,7 +157,7 @@ export async function trash() {
 export function about() {
   return {
     title: 'Sobre o sistema', narrow: true,
-    body: html`<div class="card"><h2>Sistema de Laudo Técnico ECV</h2><p>Versão 2.1 · sistema web (navegador), sem app de loja. No celular, use "Adicionar à tela inicial" para criar um atalho.</p>
+    body: html`<div class="card"><h2>Projeto Técnico DETRAN MG</h2><p>Versão 2.1 · sistema web (navegador), sem app de loja. No celular, use "Adicionar à tela inicial" para criar um atalho.</p>
       <p>Montagem do Laudo Técnico de Infraestrutura (Anexo II) e da Declaração de Requisitos de Equipamentos (Anexo III) para as ECVs das redes Auto Visão e Royal em Minas Gerais, conforme a Portaria CET-MG nº 01524/2025 (altera a Portaria CET-MG nº 1.290/2023).</p>
       <hr><p class="small muted">Desenvolvido por</p><p style="font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px">${DOMMA} Domma Tecnologia</p><p class="small">Suporte: suporte@domma.com.br</p></div>`,
   };

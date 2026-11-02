@@ -2,8 +2,8 @@
 import { S, html, get, post, api, toast, showErr, fmtDate, fmtDT, fmtMB, cnpjMask, applyBrand, brandBar, DOMMA, esc } from '../core.js';
 
 const authShell = (right) => html`<div class="auth">
-  <div class="l"><div style="display:flex;align-items:center;gap:10px;font-weight:700"><i style="width:22px;height:22px;border-radius:6px;background:var(--yellow);display:inline-block"></i>Laudo ECV</div>
-    <h1>Sistema de Laudo Técnico ECV</h1><p>Montagem do Laudo Técnico de Infraestrutura (Anexo II) e da Declaração de Equipamentos (Anexo III) — Portaria CET-MG nº 01524/2025.</p>
+  <div class="l"><div style="display:flex;align-items:center;gap:10px;font-weight:700"><i style="width:22px;height:22px;border-radius:6px;background:var(--yellow);display:inline-block"></i>Projeto Técnico DETRAN MG</div>
+    <h1>Projeto Técnico DETRAN MG</h1><p>Montagem do Laudo Técnico de Infraestrutura (Anexo II) e da Declaração de Equipamentos (Anexo III) — Portaria CET-MG nº 01524/2025.</p>
     <div class="brands">${(S.me?.brands || []).map((b) => html`<span style="color:${b.theme.accent}">${b.name}</span>`)}</div>
     <div class="dev">Desenvolvido por<b>${DOMMA} Domma Tecnologia</b></div></div>
   <div class="r">${right}</div></div>`;
@@ -12,7 +12,7 @@ export function adminLogin() {
   if (S.me && S.me.user) { location.hash = '#/'; return { redirect: true }; }
   return { title: 'Entrar', body: authShell(html`<div class="card" id="box">
       <h2>Acesso do Administrador</h2>
-      <p class="muted small">O sistema é interno: só o Administrador usa senha. Franqueados, equipe, coordenadores e engenheiros entram pelo link pessoal recebido.</p>
+      <p class="muted small">O sistema é interno: só o Administrador usa senha. As lojas entram pelo link pessoal gerado pela franqueadora.</p>
       <form id="f1" class="stack"><div><label class="f">E-mail</label><input name="email" type="email" autocomplete="username" required></div>
       <div><label class="f">Senha</label><input name="password" type="password" autocomplete="current-password" required></div>
       <button class="btn primary block lg">Entrar</button></form>
@@ -30,21 +30,15 @@ export function adminLogin() {
 }
 
 export function requestLink() {
-  return { title: 'Pedir novo link', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card" style="width:100%">
-    <h2>Pedir novo link de acesso</h2>
-    <p class="muted">Informe o CNPJ da loja ou o seu WhatsApp. Enviamos um novo link apenas para os contatos <b>já cadastrados</b>.</p>
-    <form id="f" class="stack"><input name="q" placeholder="CNPJ ou WhatsApp com DDD" required inputmode="numeric"><button class="btn primary block lg">Enviar link</button></form>
-    <div id="msg"></div><hr><a href="#/login" class="small">Sou administrador</a>
-    <div class="small muted" style="margin-top:24px">Desenvolvido por ${DOMMA} <b>Domma Tecnologia</b></div></div></div>`,
-    mount(root) {
-      root.querySelector('#f').onsubmit = async (e) => {
-        e.preventDefault();
-        try { const r = await post('/api/auth/request-link', { cnpjOrPhone: e.target.q.value }); root.querySelector('#msg').innerHTML = String(html`<div class="note ok" style="margin-top:12px">${r.msg}</div>`); } catch (er) { showErr(er); }
-      };
-    } };
+  return { title: 'Perdi meu link', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card" style="width:100%">
+    <h2>Perdeu o seu link de acesso?</h2>
+    <p>O link é pessoal e é gerado pela <b>franqueadora</b>. Peça a ela um novo link: ela gera na hora e envia para você.</p>
+    <p class="small muted">Por segurança, o link antigo pode ser revogado quando um novo é gerado.</p>
+    <hr><a href="#/login" class="small">Sou da franqueadora / administrador</a>
+    <div class="small muted" style="margin-top:24px">Desenvolvido por ${DOMMA} <b>Domma Tecnologia</b></div></div></div>` };
 }
-export const invalidLink = () => ({ title: 'Link inválido', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card"><h2>Este link não é mais válido</h2><p>O link pode ter sido revogado ou substituído por um novo. Peça um novo link: ele será enviado ao WhatsApp ou e-mail já cadastrados.</p><a class="btn primary block" href="#/pedir-link">Pedir novo link</a></div></div>` });
-export const expired = () => ({ title: 'Acesso', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card"><h2>Acesso expirado neste aparelho</h2><p>Abra novamente o seu link pessoal (WhatsApp ou e-mail) para continuar de onde parou.</p><a class="btn primary block" href="#/pedir-link">Não tenho o link</a><p class="small"><a href="#/login">Sou administrador</a></p></div></div>` });
+export const invalidLink = () => ({ title: 'Link inválido', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card"><h2>Este link não é mais válido</h2><p>O link pode ter sido revogado ou substituído por um novo. Peça um novo link à franqueadora.</p><a class="btn primary block" href="#/pedir-link">Como conseguir um novo link</a></div></div>` });
+export const expired = () => ({ title: 'Acesso', body: html`<div style="min-height:100vh;display:flex;align-items:center;padding:16px"><div class="card mobile-card"><h2>Acesso expirado neste aparelho</h2><p>Abra novamente o seu link pessoal para continuar de onde parou.</p><a class="btn primary block" href="#/pedir-link">Não tenho o link</a><p class="small"><a href="#/login">Sou administrador</a></p></div></div>` });
 
 export async function firstAccess() {
   if (!S.me.user) { location.hash = '#/login'; return { redirect: true }; }

@@ -1,5 +1,5 @@
 // Painel da Franqueadora: visão geral, lojas, cadastro, importação, solicitação, matriz e notificações.
-import { S, html, raw, get, post, put, toast, showErr, modal, confirmBox, fmtDate, fmtDT, cnpjMask, statusPill, brandPill, bar, has, readForm, esc } from '../core.js';
+import { S, html, raw, get, post, put, del, toast, showErr, modal, confirmBox, promptBox, fmtDate, fmtDT, cnpjMask, statusPill, brandPill, bar, has, readForm, esc } from '../core.js';
 
 const porteL = (p) => (p ? S.cat.PORTE_LABEL[p] : '—');
 
@@ -15,7 +15,6 @@ export async function dashboard() {
     body: html`
     <div class="row" style="margin-bottom:14px">
       <select id="fb" style="max-width:190px"><option value="">Marca: todas</option>${opt(d.filters.brands, q.get('brand'))}</select>
-      <select id="fc" style="max-width:220px"><option value="">Coordenador: todos</option>${opt(d.filters.coordinators, q.get('coord'))}</select>
       <select id="fm" style="max-width:220px"><option value="">Município: todos</option>${opt(d.filters.municipios, q.get('mun'), 'ibge')}</select>
     </div>
     <div class="kpis">
@@ -24,7 +23,7 @@ export async function dashboard() {
     </div>
     <div class="split">
       <div class="card pad0">
-        <div class="row between" style="padding:14px 16px"><h3 style="margin:0">Quem está faltando</h3>${canAct ? html`<button class="btn sm" id="cobrarSel">Cobrar selecionados</button>` : ''}</div>
+        <div class="row between" style="padding:14px 16px"><h3 style="margin:0">Quem está faltando</h3>${canAct ? html`<button class="btn sm" id="cobrarSel">Cobrar selecionadas</button>` : ''}</div>
         <div class="tablewrap"><table class="t resp"><thead><tr>${canAct ? html`<th></th>` : ''}<th>Loja</th><th>Marca</th><th>Município · porte</th><th>Situação</th><th>Checklist</th><th>Parado há</th><th></th></tr></thead><tbody>
           ${d.missing.length ? d.missing.map((m) => html`<tr>${canAct ? html`<td><input type="checkbox" class="sel" value="${m.store.id}"></td>` : ''}
             <td data-l="Loja"><b>${m.store.fantasia}</b><div class="small muted">${m.code}</div></td><td data-l="Marca">${brandPill(m.store.brand, m.store.brand_slug)}</td>
@@ -49,9 +48,9 @@ export async function dashboard() {
       </div>
     </div>`,
     mount(root) {
-      const upd = () => { const p = new URLSearchParams(); for (const [id, k] of [['fb', 'brand'], ['fc', 'coord'], ['fm', 'mun']]) { const v = root.querySelector('#' + id).value; if (v) p.set(k, v); } location.hash = '#/painel?' + p; };
-      root.querySelectorAll('#fb,#fc,#fm').forEach((s) => (s.onchange = upd));
-      const cobrar = async (ids) => { for (const id of ids) await post(`/api/stores/${id}/send-link`, { channel: 'whatsapp', kind: 'cobranca' }).catch(showErr); toast(`Cobrança enviada para ${ids.length} loja(s).`, 'ok'); };
+      const upd = () => { const p = new URLSearchParams(); for (const [id, k] of [['fb', 'brand'], ['fm', 'mun']]) { const v = root.querySelector('#' + id).value; if (v) p.set(k, v); } location.hash = '#/painel?' + p; };
+      root.querySelectorAll('#fb,#fm').forEach((s) => (s.onchange = upd));
+      const cobrar = async (ids) => { const items = []; for (const id of ids) { const st = d.missing.find((m) => String(m.store.id) === String(id)); try { items.push({ ...(await post(`/api/stores/${id}/link`, { kind: 'cobranca' })), store: st?.store.fantasia }); } catch (e) { items.push({ store: st?.store.fantasia, error: e.message }); } } linksModal(items, 'Cobrar lojas'); };
       root.querySelectorAll('[data-cobrar]').forEach((b) => (b.onclick = () => cobrar([b.dataset.cobrar])));
       const cs = root.querySelector('#cobrarSel');
       if (cs) cs.onclick = () => { const ids = [...root.querySelectorAll('.sel:checked')].map((x) => x.value); if (!ids.length) return toast('Selecione as lojas.', 'err'); cobrar(ids); };
@@ -77,33 +76,49 @@ export async function stores() {
         <td data-l="Município">${s.municipio?.name || '—'} · ${porteL(s.porte)}</td><td data-l="Franqueado">${s.franchisee?.name || html`<span class="muted">—</span>`}</td>
         <td data-l="Processo">${s.laudo ? html`<a href="#/laudo/${s.laudo.id}">${s.laudo.code}</a> ${statusPill(s.laudo.status, s.laudo.statusLabel)}<div style="max-width:120px">${bar(s.laudo.progress)}</div>` : s.lastLaudo ? html`<span class="muted small">Último: ${s.lastLaudo.statusLabel}</span>` : html`<span class="muted">—</span>`}</td>
         <td data-l="Link">${s.franchisee ? (s.franchisee.link_opened_at ? html`<span class="pill ok">aberto</span>` : html`<span class="pill">não aberto</span>`) : '—'}</td>
-        <td class="nowrap">${canAct ? html`<a class="btn sm" href="#/lojas/${s.id}">Editar</a> <button class="btn sm" data-link="${s.id}">Enviar link</button>` : ''}</td></tr>`)}
+        <td class="nowrap">${canAct ? html`<a class="btn sm" href="#/lojas/${s.id}">Editar</a> <button class="btn sm" data-link="${s.id}">Copiar link</button> <button class="btn sm danger" data-del="${s.id}" title="Excluir loja">Excluir</button>` : ''}</td></tr>`)}
     </tbody></table></div></div>`,
     mount(root) {
       const filt = () => { const q = root.querySelector('#q').value.toLowerCase(), b = root.querySelector('#fb').value; root.querySelectorAll('tbody tr').forEach((tr) => (tr.hidden = (q && !tr.dataset.s.includes(q)) || (b && tr.dataset.b !== b))); };
       root.querySelector('#q').oninput = filt; root.querySelector('#fb').onchange = filt;
       const all = root.querySelector('#all'); if (all) all.onchange = () => root.querySelectorAll('tr:not([hidden]) .sel').forEach((c) => (c.checked = all.checked));
       const rs = root.querySelector('#reqSel'); if (rs) rs.onclick = () => { const ids = [...root.querySelectorAll('.sel:checked')].map((x) => x.value); if (!ids.length) return toast('Selecione as lojas.', 'err'); location.hash = '#/solicitar?ids=' + ids.join(','); };
-      root.querySelectorAll('[data-link]').forEach((b) => (b.onclick = () => sendLinkModal(b.dataset.link)));
+      root.querySelectorAll('[data-link]').forEach((b) => (b.onclick = () => linkModal(b.dataset.link)));
+      root.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => deleteStore(list.find((x) => String(x.id) === b.dataset.del), () => import('../app.js').then((m) => m.render()))));
     },
   };
 }
 
-export function sendLinkModal(storeId) {
-  modal({ title: 'Enviar link de acesso', body: html`<p>O link é pessoal e abre direto na área da loja, sem senha. A mensagem usa a identidade da marca da loja.</p>
-    <div class="seg" id="ch"><button class="on" data-v="whatsapp">WhatsApp</button><button data-v="email">E-mail</button><button data-v="copy">Copiar link</button></div><div id="out" style="margin-top:12px"></div>`,
-    actions: [{ label: 'Fechar' }, { label: 'Enviar', cls: 'primary', onClick: async (m) => {
-      const ch = m.querySelector('#ch .on').dataset.v;
-      const r = await post(`/api/stores/${storeId}/send-link`, { channel: ch });
-      if (ch === 'copy') { await navigator.clipboard?.writeText(r.link).catch(() => {}); m.querySelector('#out').innerHTML = String(html`<label class="f">Link copiado:</label><input readonly value="${r.link}" onclick="this.select()">`); return false; }
-      toast('Link enviado.', 'ok');
-    } }],
-    onMount: (m) => m.querySelectorAll('#ch button').forEach((b) => (b.onclick = () => { m.querySelectorAll('#ch button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); })) });
+// O sistema não envia mensagens: gera o link pessoal e a mensagem pronta para copiar e mandar.
+const copy = async (txt, ok = 'Copiado.') => { try { await navigator.clipboard.writeText(txt); toast(ok, 'ok'); } catch { toast('Selecione o texto e copie manualmente.', 'err'); } };
+export function linksModal(items, title = 'Links de acesso') {
+  modal({ title, wide: items.length > 1, body: html`<p class="small muted">O link é pessoal e abre direto na área da loja, sem senha. Copie e envie você mesmo (WhatsApp, e-mail…). Não encaminhe para outras pessoas.</p>
+    ${items.map((x, i) => html`<div class="card" style="margin-top:10px"><div class="row between"><b>${x.store || ''}</b><span class="small muted">${x.name || ''}${x.phone ? ' · ' + x.phone : ''}</span></div>
+      ${x.link ? html`<label class="f" style="margin-top:8px">Link pessoal</label><div class="row" style="flex-wrap:nowrap"><input readonly value="${x.link}" onclick="this.select()"><button class="btn" data-cl="${i}">Copiar link</button></div>
+      <label class="f" style="margin-top:8px">Mensagem pronta</label><textarea readonly rows="4">${x.message}</textarea><div class="row" style="margin-top:6px"><button class="btn primary sm" data-cm="${i}">Copiar mensagem</button></div>`
+      : html`<div class="note warn">${x.error || 'Cadastre o franqueado desta loja para gerar o link.'}</div>`}</div>`)}`,
+    actions: [{ label: 'Fechar' }],
+    onMount: (m) => { m.querySelectorAll('[data-cl]').forEach((b) => (b.onclick = () => copy(items[+b.dataset.cl].link, 'Link copiado.'))); m.querySelectorAll('[data-cm]').forEach((b) => (b.onclick = () => copy(items[+b.dataset.cm].message, 'Mensagem copiada.'))); } });
+}
+export async function linkModal(storeId, kind) {
+  try { const r = await post(`/api/stores/${storeId}/link`, { kind }); const st = await get('/api/stores/' + storeId); linksModal([{ ...r, store: st.fantasia }], kind === 'cobranca' ? 'Cobrar a loja' : 'Link de acesso da loja'); } catch (e) { showErr(e); }
+}
+export async function deleteStore(s, after) {
+  const typed = await promptBox('Excluir loja', `Isso remove "${s.fantasia}" do sistema, cancela o preenchimento em andamento e desativa o link do franqueado. O Administrador pode restaurar pela lixeira em até 90 dias. Para confirmar, digite EXCLUIR:`, { okLabel: 'Excluir loja' });
+  if (typed == null) return;
+  if (typed.trim().toUpperCase() !== 'EXCLUIR') return toast('Exclusão cancelada: digite EXCLUIR para confirmar.', 'err');
+  try { await del('/api/stores/' + s.id); toast('Loja excluída.', 'ok'); after && after(); } catch (e) { showErr(e); }
+}
+export async function deleteLaudo(l, after) {
+  const signed = ['liberado_assinatura', 'pronto_protocolo', 'protocolado', 'exigencia', 'deferido', 'indeferido'].includes(l.status);
+  const typed = await promptBox('Excluir preenchimento', `Atenção: o preenchimento ${l.code} (${l.statusLabel}) será excluído com todas as fotos, medidas e versões.${signed ? ' ESTE LAUDO JÁ TEM DOCUMENTOS GERADOS/ASSINADOS.' : ''} A loja perde o que já enviou. O Administrador pode restaurar pela lixeira em até 90 dias. Para confirmar, digite EXCLUIR:`, { okLabel: 'Excluir preenchimento' });
+  if (typed == null) return;
+  if (typed.trim().toUpperCase() !== 'EXCLUIR') return toast('Exclusão cancelada: digite EXCLUIR para confirmar.', 'err');
+  try { await del('/api/laudos/' + l.id); toast('Preenchimento excluído.', 'ok'); after && after(); } catch (e) { showErr(e); }
 }
 
 export async function storeForm(id) {
   const [s, users, muns] = await Promise.all([id ? get('/api/stores/' + id) : null, get('/api/users').catch(() => []), get('/api/municipios?limit=900')]);
-  const coords = users.filter((u) => u.roles.includes('coordenador'));
   const v = s || { status: 'ativa' };
   const fr = s?.franchisee || {};
   const qsa = (s?.cnpj_data?.qsa) || [];
@@ -124,15 +139,14 @@ export async function storeForm(id) {
         <div class="card"><h3>Representante legal</h3>
           ${qsa.length ? html`<label class="f">Quadro de sócios (QSA da Receita)</label><div class="row" style="margin-bottom:10px">${qsa.map((q) => html`<button type="button" class="btn sm" data-qsa="${q.nome}" data-q="${q.qualificacao}">${q.nome} · ${q.qualificacao}</button>`)}</div>` : ''}
           <div class="grid g3"><div><label class="f">Nome</label><input name="rep_name" value="${v.rep_name || ''}"></div><div><label class="f">CPF (completo)</label><input name="rep_cpf" value="${v.rep_cpf || ''}" placeholder="A Receita mostra o CPF mascarado"></div><div><label class="f">Cargo/função</label><input name="rep_role" value="${v.rep_role || ''}"></div></div></div>
-        <div class="card"><h3>Franqueado (recebe o link pessoal)</h3>
+        <div class="card"><h3>Franqueado (acessa pelo link pessoal)</h3>
           <div class="grid g3"><div><label class="f">Nome *</label><input name="franchisee_name" value="${fr.name || ''}"></div><div><label class="f">E-mail</label><input name="franchisee_email" type="email" value="${fr.email || ''}"></div><div><label class="f">WhatsApp</label><input name="franchisee_phone" value="${fr.phone || ''}"></div></div>
-          ${s && fr.id ? html`<div class="row" style="margin-top:10px"><span class="small muted">Link ${fr.link_opened_at ? 'aberto em ' + fmtDT(fr.link_opened_at) : 'ainda não aberto'} · último acesso ${fmtDT(fr.last_access_at)}</span><span class="spacer"></span><button type="button" class="btn sm" id="sendLink">Enviar link</button><button type="button" class="btn sm danger" id="revoke">Revogar e gerar novo link</button></div>` : ''}
+          ${s && fr.id ? html`<div class="row" style="margin-top:10px"><span class="small muted">Link ${fr.link_opened_at ? 'aberto em ' + fmtDT(fr.link_opened_at) : 'ainda não aberto'} · último acesso ${fmtDT(fr.last_access_at)}</span><span class="spacer"></span><button type="button" class="btn sm" id="sendLink">Copiar link</button><button type="button" class="btn sm danger" id="revoke">Revogar e gerar novo link</button></div>` : ''}
         </div>
       </div>
       <div>
         <div class="card"><h3>Rede</h3>
           <div class="stack"><div><label class="f">Marca *</label><select name="brand_id" required><option value="">Selecione</option>${S.me.brands.map((b) => html`<option value="${b.id}" ${b.id === v.brand_id ? 'selected' : ''}>${b.name}</option>`)}</select><div class="hint">Define a identidade visual de tudo o que a loja recebe.</div></div>
-          <div><label class="f">Coordenador</label><select name="coordinator_id"><option value="">—</option>${coords.map((c) => html`<option value="${c.id}" ${c.id === v.coordinator_id ? 'selected' : ''}>${c.name}</option>`)}</select></div>
           <div><label class="f">Vencimento do credenciamento</label><input type="date" name="cred_expiry" value="${v.cred_expiry || ''}"></div>
           <div><label class="f">Situação da loja</label><select name="status">${[['ativa', 'Ativa'], ['implantacao', 'Em implantação'], ['inativa', 'Inativa']].map(([k, l]) => html`<option value="${k}" ${v.status === k ? 'selected' : ''}>${l}</option>`)}</select></div>
           <div><label class="f">Pasta da loja no Google Drive</label><input name="drive_folder" value="${v.drive_folder || ''}" placeholder="https://drive.google.com/drive/folders/…"><div class="hint">Sugestão: Vídeos / Fotos em alta / Certificados.</div></div></div></div>
@@ -141,7 +155,9 @@ export async function storeForm(id) {
           <p class="small muted">Lista da CET-MG (oficial); tabela IBGE como conferência. Só o Administrador altera, com justificativa.</p>
           ${s && has('admin') ? html`<button type="button" class="btn sm" id="porte">Alterar porte desta loja</button>` : ''}</div>
         <div class="card"><button class="btn primary block lg">Salvar loja</button>${s ? html`<p class="small muted" style="margin-top:8px">Laudo: ${s.laudo ? html`<a href="#/laudo/${s.laudo.id}">${s.laudo.code}</a> · ${s.laudo.statusLabel}` : 'nenhum em andamento'}</p>` : ''}
-          ${s && !s.laudo ? html`<a class="btn block" href="#/solicitar?ids=${s.id}">Solicitar preenchimento</a>` : ''}</div>
+          ${s && !s.laudo ? html`<a class="btn block" href="#/solicitar?ids=${s.id}">Solicitar preenchimento</a>` : ''}
+          ${s && s.laudo ? html`<button type="button" class="btn danger block" id="delLaudo" style="margin-top:6px">Excluir preenchimento</button>` : ''}
+          ${s ? html`<button type="button" class="btn danger block" id="delStore" style="margin-top:6px">Excluir loja</button>` : ''}</div>
       </div></form>`,
     mount(root) {
       const f = root.querySelector('#f');
@@ -173,7 +189,9 @@ export async function storeForm(id) {
         body.cnpj = body.cnpj.replace(/\D/g, '');
         try { const r = s ? await put('/api/stores/' + s.id, body) : await post('/api/stores', body); toast('Loja salva.', 'ok'); location.hash = '#/lojas/' + r.id; } catch (er) { showErr(er); }
       };
-      const sl = root.querySelector('#sendLink'); if (sl) sl.onclick = () => sendLinkModal(s.id);
+      const sl = root.querySelector('#sendLink'); if (sl) sl.onclick = () => linkModal(s.id);
+      const ds = root.querySelector('#delStore'); if (ds) ds.onclick = () => deleteStore(s, () => (location.hash = '#/lojas'));
+      const dl = root.querySelector('#delLaudo'); if (dl) dl.onclick = () => deleteLaudo(s.laudo, () => import('../app.js').then((m) => m.render()));
       const rv = root.querySelector('#revoke'); if (rv) rv.onclick = async () => { if (!(await confirmBox('Revogar link', 'O link atual deixa de funcionar e todos os aparelhos conectados saem. Um novo link será gerado.', 'Revogar', 'danger'))) return; const r = await post(`/api/users/${fr.id}/revoke-link`); modal({ title: 'Novo link gerado', body: html`<p>Envie o novo link ao franqueado:</p><input readonly value="${r.link}">` }); };
       const pb = root.querySelector('#porte'); if (pb) pb.onclick = () => porteModal(s);
     },
@@ -187,7 +205,7 @@ function porteModal(s) {
 }
 
 export function importStores() {
-  const tpl = 'cnpj;marca;nome_fantasia;municipio;coordenador_email;franqueado;franqueado_email;franqueado_whatsapp;vencimento\n00.000.000/0001-00;Auto Visão;Auto Visão Exemplo;Alfenas;alexandre@franqueadora.com.br;Nome do Franqueado;email@exemplo.com;(35) 99999-0000;31/12/2026';
+  const tpl = 'cnpj;marca;nome_fantasia;municipio;franqueado;franqueado_email;franqueado_whatsapp;vencimento\n00.000.000/0001-00;Auto Visão;Auto Visão Exemplo;Alfenas;Nome do Franqueado;email@exemplo.com;(35) 99999-0000;31/12/2026';
   return {
     title: 'Importação de lojas por planilha',
     body: html`<div class="card"><h3>1. Baixe o modelo, preencha e envie</h3>
@@ -223,7 +241,7 @@ export async function requestFill() {
   const list = await get('/api/stores');
   const groups = (annex) => (annex === 'II' ? S.cat.A2 : S.cat.A3);
   return {
-    title: 'Solicitar preenchimento e enviar link',
+    title: 'Solicitar preenchimento',
     body: html`<div class="split"><div>
       <div class="card"><h3>Lojas</h3><input id="q" placeholder="Filtrar" style="margin-bottom:8px">
         <div style="max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:8px">${list.map((s) => html`<label class="list-item" style="cursor:pointer" data-s="${s.fantasia.toLowerCase()}"><input type="checkbox" class="sel" value="${s.id}" ${pre.includes(String(s.id)) ? 'checked' : ''} ${s.laudo ? 'disabled' : ''}>
@@ -234,11 +252,10 @@ export async function requestFill() {
         <div id="scope" hidden style="margin-top:12px"><div class="note">Alteração de endereço / modificação (art. 45 §1º): escolha os itens que entram no documento. O checklist e o PDF saem só com esses tópicos, mantendo a numeração original.</div>
           <div class="grid g2" style="margin-top:10px">${['II', 'III'].map((a) => html`<div><h4>Anexo ${a}</h4>${groups(a).map((it) => html`<label class="check" style="display:flex;margin:6px 0"><input type="checkbox" class="sc" value="${it.key}"> ${it.n}. ${it.title}</label>`)}</div>`)}</div></div></div>
       </div><div>
-      <div class="card"><h3>Envio</h3><label class="f">Canal</label>
-        <div class="seg" id="ch"><button class="on" data-v="whatsapp">WhatsApp</button><button data-v="email">E-mail</button><button data-v="none">Só criar (copiar depois)</button></div>
-        <h4 style="margin-top:16px">Prévia da mensagem</h4><div id="prev" class="note brand small"></div>
-        <button class="btn yellow block lg" id="go" style="margin-top:14px">Criar pedido e enviar</button>
-        <p class="small muted">O laudo de cada loja nasce como "Não iniciado", com o checklist já montado.</p></div>
+      <div class="card"><h3>Criar pedido</h3>
+        <p class="small muted">O preenchimento de cada loja nasce como "Não iniciado", com o checklist já montado. Em seguida o sistema mostra o link pessoal e uma mensagem pronta de cada loja para você copiar e enviar.</p>
+        <h4 style="margin-top:12px">Prévia da mensagem</h4><div id="prev" class="note brand small"></div>
+        <button class="btn yellow block lg" id="go" style="margin-top:14px">Criar pedido e gerar links</button></div>
       </div></div>`,
     mount(root) {
       const pt = root.querySelector('#pt'), sc = root.querySelector('#scope');
@@ -246,20 +263,18 @@ export async function requestFill() {
         sc.hidden = !['alteracao_endereco', 'modificacao'].includes(pt.value);
         const first = list.find((s) => root.querySelector(`.sel[value="${s.id}"]`)?.checked);
         const dl = root.querySelector('#dl').value;
-        root.querySelector('#prev').innerHTML = String(html`<b>${first?.brand?.name || 'Marca'} · ${S.cat.PROCESS_TYPES[pt.value]} da unidade ${first?.fantasia || '[loja]'}</b><br>Olá, ${(first?.franchisee?.name || '[franqueado]').split(' ')[0]}! A ${first?.brand?.name || '[marca]'} solicitou o preenchimento do laudo de ${S.cat.PROCESS_TYPES[pt.value].toLowerCase()} da unidade ${first?.fantasia || '[loja]'}${dl ? ' até ' + fmtDate(dl) : ''}. Seu checklist já está pronto. Acesse pelo link pessoal (não encaminhe): <u>link pessoal</u>`);
+        root.querySelector('#prev').innerHTML = String(html`<b>${first?.brand?.name || 'Marca'} · ${S.cat.PROCESS_TYPES[pt.value]} da unidade ${first?.fantasia || '[loja]'}</b><br>Olá, ${(first?.franchisee?.name || '[franqueado]').split(' ')[0]}! A ${first?.brand?.name || '[marca]'} solicitou o preenchimento do ${S.cat.PROCESS_TYPES[pt.value].toLowerCase()} da unidade ${first?.fantasia || '[loja]'}${dl ? ' até ' + fmtDate(dl) : ''}. Seu checklist já está pronto. Acesse pelo seu link pessoal (não encaminhe): <u>link pessoal</u>`);
       };
       root.querySelectorAll('input,select').forEach((e) => e.addEventListener('change', upd)); upd();
       root.querySelector('#q').oninput = (e) => root.querySelectorAll('[data-s]').forEach((l) => (l.hidden = !l.dataset.s.includes(e.target.value.toLowerCase())));
-      root.querySelectorAll('#ch button').forEach((b) => (b.onclick = () => { root.querySelectorAll('#ch button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); }));
       root.querySelector('#go').onclick = async () => {
         const ids = [...root.querySelectorAll('.sel:checked')].map((x) => +x.value);
         if (!ids.length) return toast('Selecione ao menos uma loja.', 'err');
         try {
-          const r = await post('/api/laudos/request', { storeIds: ids, process_type: pt.value, deadline: root.querySelector('#dl').value || null, scope_items: [...root.querySelectorAll('.sc:checked')].map((x) => x.value), channel: root.querySelector('#ch .on').dataset.v });
+          const r = await post('/api/laudos/request', { storeIds: ids, process_type: pt.value, deadline: root.querySelector('#dl').value || null, scope_items: [...root.querySelectorAll('.sc:checked')].map((x) => x.value) });
           const ok = r.filter((x) => x.ok).length, bad = r.filter((x) => !x.ok);
           toast(`${ok} pedido(s) criado(s).`, 'ok');
-          if (bad.length) modal({ title: 'Algumas lojas não foram incluídas', body: html`${bad.map((b) => html`<div class="issue B">${b.error}</div>`)}` });
-          else location.hash = '#/painel';
+          linksModal(r.map((x) => (x.ok ? x : { ...x, store: list.find((st) => st.id === x.storeId)?.fantasia })), `${ok} pedido(s) criado(s) — copie e envie os links`);
         } catch (e) { showErr(e); }
       };
     },

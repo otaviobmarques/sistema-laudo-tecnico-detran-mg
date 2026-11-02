@@ -259,3 +259,115 @@ body.royal .num-badge { border-radius: 0; clip-path: polygon(0 0, 100% 0, 100% 7
 }
 @media (min-width: 901px) { .hide-d { display: none !important; } }
 @media print { .side, .topbar, .bottomnav, .btn { display: none !important; } .shell { display: block; } }
+
+/* =====================================================================
+   DESIGN SYSTEM DAS MARCAS — área da loja (Direção Visual v1.0)
+   Auto Visão: vermelho #ED3237 · preto #151415 · Nunito + Inter · cantos arredondados · faixa quadriculada oficial
+   Royal: laranja #ED712F · preto #101419 · off-white #F7F3E2 · Raleway 900 caixa alta + Inter · chanfro 45° · faixa oficial
+   ===================================================================== */
+.pattern.faixa { background: var(--faixa) repeat-x left center / auto 100%; background-color: transparent; height: 36px; }
+.pattern.faixa::before, .pattern.faixa::after { display: none; }
+.brandbar img { height: 32px; max-height: none; width: auto; display: block; }
+.kicker { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .14em; margin: 0 0 4px; }
+.kicker::before { content: ''; width: 28px; height: 4px; border-radius: 2px; background: var(--brand-accent); flex: none; }
+.ds-block-title { margin: 0; }
+
+/* ---------- Auto Visão ---------- */
+body.store.autovisao { --bg: #F6F4F5; --card: #FFFFFF; --text: #151415; --muted: #696267; --line: #DED8DC; --line-2: #EEE9EC;
+  --ok: #18743B; --ok-bg: #E7F4EC; --err: #C9232C; --err-bg: #FDE7E9; --font: Inter, "Segoe UI", system-ui, sans-serif; --font-brand: Nunito, ui-rounded, "Segoe UI", system-ui, sans-serif; --r: 20px; --r-sm: 12px;
+  --shadow: 0 1px 2px rgba(21,20,21,.06), 0 8px 24px rgba(21,20,21,.06); }
+body.store.autovisao h1, body.store.autovisao h2, body.store.autovisao h3, body.store.autovisao .brand-title { font-family: var(--font-brand); font-weight: 900; letter-spacing: -.01em; }
+body.store.autovisao .card { border: 0; }
+body.store.autovisao .brandbar { background: #ED3237; }
+body.store.autovisao .side { background: #151415; }
+body.store.autovisao .side a.nav.on { background: #2A2829; border-left-color: #ED3237; }
+body.store.autovisao .side .logo i { background: #ED3237; }
+body.store.autovisao .btn { border-radius: 999px; font-family: var(--font-brand); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; font-size: 12.5px; border: 1.5px solid #DED8DC; min-height: 40px; padding: 8px 18px; }
+body.store.autovisao .btn.sm { min-height: 30px; padding: 4px 12px; font-size: 11px; }
+body.store.autovisao .btn.brand, body.store.autovisao .btn.primary { background: #151415; border-color: #151415; color: #fff; }
+body.store.autovisao .btn.brand:hover, body.store.autovisao .btn.primary:hover { background: #2A2A2A; }
+body.store.autovisao .btn.link { text-transform: none; letter-spacing: 0; border: 0; font-family: var(--font); }
+body.store.autovisao .pill { border-radius: 999px; font-weight: 700; background: #F6F4F5; color: #151415; border: 1px solid #DED8DC; }
+body.store.autovisao .pill.ok { background: #E7F4EC; color: #18743B; border-color: transparent; }
+body.store.autovisao .pill.err { background: #FDE7E9; color: #C9232C; border-color: transparent; }
+body.store.autovisao .pill.warn { background: #fff; color: #C9232C; border-color: #ED3237; }
+body.store.autovisao .pill.info { background: #151415; color: #fff; border-color: #151415; }
+body.store.autovisao .irow .ic { border-radius: 50%; width: 30px; height: 30px; background: #fff; border: 2px solid #DED8DC; color: #696267; font-family: var(--font-brand); font-weight: 900; }
+body.store.autovisao .irow .ic.pronto, body.store.autovisao .irow .ic.completo { background: #ED3237; border-color: #ED3237; color: #fff; }
+body.store.autovisao .irow .ic.parcial { background: #fff; border-color: #ED3237; color: #ED3237; }
+body.store.autovisao .irow .ic.erro { background: #151415; border-color: #151415; color: #fff; }
+body.store.autovisao .num-badge { background: #ED3237; font-family: var(--font-brand); font-weight: 900; }
+body.store.autovisao .bar > i { background: #ED3237; }
+body.store.autovisao .seg { border-radius: 999px; border-color: #DED8DC; }
+body.store.autovisao .seg button.on, body.store.autovisao .box-tabs button.on { background: #151415; border-color: #151415; }
+body.store.autovisao .kicker { font-family: var(--font-brand); color: #C9232C; }
+body.store.autovisao .kicker::before { background: #ED3237; }
+body.store.autovisao .note.brand { background: #fff; border-left: 4px solid #ED3237; border-radius: 12px; }
+body.store.autovisao .note.warn, body.store.autovisao .issue.A { background: #F6F4F5; color: #151415; border-left: 3px solid #151415; }
+body.store.autovisao .note.err, body.store.autovisao .issue.B { background: #FDE7E9; color: #8E1A20; }
+body.store.autovisao .note.info, body.store.autovisao .note:not(.ok):not(.err):not(.warn):not(.brand) { background: #fff; color: #151415; border-left: 3px solid #ED3237; }
+body.store.autovisao .note.ok { background: #E7F4EC; color: #11532A; }
+body.store.autovisao .stepper span.on { background: #151415; } body.store.autovisao .stepper span.done { background: #E7F4EC; color: #18743B; }
+body.store.autovisao .bottomnav a.on { color: #ED3237; }
+body.store.autovisao input:focus, body.store.autovisao select:focus, body.store.autovisao textarea:focus { outline-color: rgba(237,50,55,.35); border-color: #ED3237; }
+body.store.autovisao .ph.empty:hover { border-color: #ED3237; color: #C9232C; }
+
+/* ---------- Royal ---------- */
+body.store.royal { --bg: #F7F3E2; --card: #FFFFFF; --text: #101419; --muted: #575B62; --line: #D9D4C2; --line-2: #EEEBDF;
+  --ok: #1D6A37; --ok-bg: #E3F2E7; --err: #B42318; --err-bg: #FCE9E6; --font: Inter, "Segoe UI", system-ui, sans-serif; --font-brand: Raleway, "Arial Black", system-ui, sans-serif; --r: 10px; --r-sm: 8px;
+  --shadow: 0 1px 2px rgba(16,20,25,.06), 0 8px 24px rgba(16,20,25,.08); }
+body.store.royal h1, body.store.royal h2, body.store.royal .brand-title { font-family: var(--font-brand); font-weight: 900; text-transform: uppercase; letter-spacing: -.01em; }
+body.store.royal h3 { font-family: var(--font-brand); font-weight: 800; }
+body.store.royal .card { position: relative; border-color: #D9D4C2; }
+body.store.royal .card::before { content: ''; position: absolute; top: -1px; left: 18px; width: 44px; height: 4px; background: #ED712F; }
+body.store.royal .card.pad0::before { left: 16px; }
+body.store.royal .brandbar { background: #101419; }
+body.store.royal .brandbar img { height: 44px; }
+body.store.royal .pattern.faixa { height: 24px; background-color: #F7F3E2; }
+body.store.royal .side { background: #101419; }
+body.store.royal .side a.nav.on { background: #1B2027; border-left-color: #ED712F; }
+body.store.royal .side .logo i { background: #ED712F; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); border-radius: 0; }
+body.store.royal .btn { border-radius: 8px; font-weight: 700; border: 1px solid #101419; background: transparent; color: #101419; min-height: 44px; transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .2s; }
+body.store.royal .btn:hover { background: #EEEBDF; }
+body.store.royal .btn.sm { min-height: 30px; }
+body.store.royal .btn.brand, body.store.royal .btn.primary { background: #ED712F; border-color: #101419; color: #101419; }
+body.store.royal .btn.brand:hover, body.store.royal .btn.primary:hover { background: #E66520; transform: translateY(-2px); box-shadow: 6px 6px 0 #101419; }
+body.store.royal .btn.danger { color: #B42318; border-color: #B42318; }
+body.store.royal .btn.link { border: 0; color: #A54413; text-decoration: underline !important; font-weight: 700; min-height: 0; }
+body.store.royal .pill { border-radius: 0; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 10.5px; background: transparent; color: #101419; border: 1.5px solid #101419;
+  clip-path: polygon(5px 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%, 0 5px); }
+body.store.royal .pill.ok { background: #ED712F; border-color: #ED712F; color: #101419; }
+body.store.royal .pill.err { background: #FCE9E6; border-color: #FCE9E6; color: #B42318; }
+body.store.royal .pill.warn { background: #EEEBDF; border-color: #EEEBDF; color: #101419; }
+body.store.royal .pill.info { background: #101419; border-color: #101419; color: #F7F3E2; }
+body.store.royal .irow .ic { border-radius: 0; width: 30px; height: 30px; background: #EEEBDF; color: #575B62; font-family: var(--font-brand); font-weight: 900;
+  clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+body.store.royal .irow .ic.pronto, body.store.royal .irow .ic.completo { background: #ED712F; color: #101419; border-radius: 50%; clip-path: none; box-shadow: inset 0 0 0 2px #101419; }
+body.store.royal .irow .ic.parcial { background: #fff; color: #ED712F; box-shadow: inset 0 0 0 2px #D9D4C2; }
+body.store.royal .irow .ic.erro { background: #101419; color: #ED712F; }
+body.store.royal .num-badge { background: #ED712F; color: #101419; font-family: var(--font-brand); font-weight: 900; border-radius: 0; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+body.store.royal .bar { background: #EEEBDF; border-radius: 0; } body.store.royal .bar > i { background: #ED712F; border-radius: 0; }
+body.store.royal .seg { border-color: #101419; border-radius: 8px; } body.store.royal .seg button { border-right-color: #101419; }
+body.store.royal .seg button.on, body.store.royal .box-tabs button.on { background: #101419; color: #F7F3E2; border-color: #101419; }
+body.store.royal .box-tabs button { border-radius: 0; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); border-color: #101419; }
+body.store.royal .kicker { font-family: var(--font); font-weight: 700; letter-spacing: .18em; color: #A54413; }
+body.store.royal .kicker::before { width: 40px; border-radius: 0; background: #ED712F; }
+body.store.royal .note { border-radius: 0; }
+body.store.royal .note.brand { background: #EEEBDF; border-left: 4px solid #ED712F; }
+body.store.royal .note.warn, body.store.royal .issue.A { background: #EEEBDF; color: #101419; border-left: 3px solid #101419; }
+body.store.royal .note.err, body.store.royal .issue.B { background: #FCE9E6; color: #8A1A12; }
+body.store.royal .note.info, body.store.royal .note:not(.ok):not(.err):not(.warn):not(.brand) { background: #fff; color: #101419; border-left: 3px solid #ED712F; }
+body.store.royal .note.ok { background: #E3F2E7; color: #1D6A37; }
+body.store.royal .stepper span { border-radius: 0; } body.store.royal .stepper span.on { background: #101419; color: #F7F3E2; } body.store.royal .stepper span.done { background: #ED712F; color: #101419; }
+body.store.royal .bottomnav a.on { color: #A54413; }
+body.store.royal input, body.store.royal select, body.store.royal textarea { border-color: #D9D4C2; border-radius: 8px; }
+body.store.royal input:focus, body.store.royal select:focus, body.store.royal textarea:focus { outline-color: rgba(165,68,19,.35); border-color: #A54413; }
+body.store.royal .ph { border-radius: 0; clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); }
+body.store.royal .ph.empty:hover { border-color: #ED712F; color: #A54413; }
+body.store.royal table.t th { background: #EEEBDF; color: #101419; }
+@media (max-width: 900px) { .brandbar img { height: 26px; } body.store.royal .brandbar img { height: 36px; } .pattern.faixa { height: 28px; } body.store.royal .pattern.faixa { height: 20px; } }
+body.store a.irow, body.store a.irow:hover { color: var(--text); text-decoration: none; }
+body.store a.irow .tx b { color: var(--text); }
+body.store.royal .card:has(.kicker)::before { display: none; }
+body.store .brandwrap { position: sticky; top: 0; z-index: 30; }
+body.store .brandwrap + .topbar { position: static; }

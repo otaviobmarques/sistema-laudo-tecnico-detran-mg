@@ -17,7 +17,9 @@ const STATUS = {
 };
 const ACTIVE = Object.keys(STATUS).filter((s) => !['deferido', 'indeferido', 'cancelado'].includes(s));
 const roles = (u) => (u ? J(u.roles, []) : []);
-const has = (u, r) => roles(u).includes(r);
+// Perfis do sistema: admin, franqueadora (analisa e valida) e loja (preenche).
+// 'coordenador' e 'diretoria' equivalem à franqueadora; não há mais usuários RT ou colaborador.
+const has = (u, r) => { const rs = roles(u); if (['coordenador', 'diretoria'].includes(r)) return rs.includes('franqueadora') || rs.includes(r); if (r === 'rt' || r === 'colaborador') return false; return rs.includes(r); };
 const isAdmin = (u) => has(u, 'admin');
 
 function scopeOf(u) { return J(u.scope, {}) || {}; }
@@ -32,27 +34,19 @@ function storeIdsForUser(u) {
     if (has(u, 'coordenador')) rows.filter((s) => s.coordinator_id === u.id || (sc.stores || []).includes(s.id) || (sc.brands && sc.brands.includes(s.brand_id) && !has(u, 'franqueadora') && sc.coordAllBrand)).forEach((s) => ids.add(s.id));
   }
   for (const r of all('SELECT store_id FROM store_users WHERE user_id=?', u.id)) ids.add(r.store_id);
-  if (has(u, 'rt')) {
-    const rt = one('SELECT id FROM rts WHERE user_id=?', u.id);
-    if (rt) for (const r of all('SELECT store_id FROM laudos WHERE rt_id=? AND deleted_at IS NULL', rt.id)) ids.add(r.store_id);
-  }
   return [...ids];
 }
 function canSeeStore(u, storeId) { return storeIdsForUser(u).includes(storeId); }
 function canSeeLaudo(u, laudo) {
   if (!laudo) return false;
   if (isAdmin(u) || has(u, 'diretoria') || has(u, 'franqueadora')) return canSeeStore(u, laudo.store_id);
-  if (has(u, 'rt')) { const rt = one('SELECT id FROM rts WHERE user_id=?', u.id); if (rt && laudo.rt_id === rt.id) return true; }
   return canSeeStore(u, laudo.store_id);
 }
 function storeRole(u, storeId) {
   const r = one('SELECT kind FROM store_users WHERE store_id=? AND user_id=?', storeId, u.id);
   return r ? r.kind : null; // 'loja' | 'colaborador'
 }
-function blocksOf(u, storeId) {
-  if (storeRole(u, storeId) !== 'colaborador') return ['A', 'B', 'C'];
-  return J(u.blocks, ['A', 'B', 'C']);
-}
+function blocksOf() { return ['A', 'B', 'C']; }
 const blockOfItem = (item) => (item.startsWith('a2_') ? 'B' : item.startsWith('a3_') || item.startsWith('eq') ? 'C' : 'A');
 
 // Edição pela loja: em preenchimento tudo; devolvido/exigência só os itens devolvidos.
@@ -60,7 +54,6 @@ function canEditItem(u, laudo, item) {
   if (isAdmin(u)) return true;
   const sr = storeRole(u, laudo.store_id);
   if (!sr) return false;
-  if (sr === 'colaborador' && item && !blocksOf(u, laudo.store_id).includes(blockOfItem(item))) return false;
   if (['nao_iniciado', 'rascunho', 'em_preenchimento'].includes(laudo.status)) return true;
   if (['devolvido', 'exigencia'].includes(laudo.status)) {
     if (!item) return false;

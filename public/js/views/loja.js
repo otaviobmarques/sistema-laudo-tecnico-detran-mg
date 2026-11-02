@@ -1,10 +1,10 @@
-// Área da loja (franqueado e colaborador): etapa 1, checklist, itens com fotos, equipamentos, envio, assinatura e versões.
+// Área da loja (franqueado): etapa 1, checklist, itens com fotos, equipamentos, envio, assinatura e versões.
 import { S, html, raw, get, post, put, del, api, toast, showErr, modal, confirmBox, promptBox, lightbox, annSvg, fmtDate, fmtDT, fmtMB, cnpjMask, cpfMask, statusPill, bar, has, readForm, debounce, num, fmtN, itemStatusLabel, esc } from '../core.js';
 import { uploadPhoto, openCamera, pickFiles, queued, getPosition } from '../upload.js';
 
 // ---------- carregamento do laudo e contexto ----------
 async function load(id) { const d = await get('/api/laudos/' + id); S.laudo = d; return d; }
-const ctxOf = (d) => ({ laudoId: d.laudo.id, brand: d.store.brand, storeName: d.store.fantasia, storeMode: !!d.perms.storeRole || d.perms.admin });
+const ctxOf = (d) => ({ laudoId: d.laudo.id, brand: d.store.brand, storeName: d.store.fantasia, storeMode: !!d.perms.storeRole || d.perms.admin || has('franqueadora') });
 const issuesOf = (d, item, stage = 'submit') => d.issues.filter((i) => i.item === item && i.stage === stage);
 const issueList = (list) => list.map((i) => html`<div class="issue ${i.type}"><span class="code">${i.code}</span><span>${i.msg}</span></div>`);
 const locked = (d, k) => !d.perms.editItems[k];
@@ -18,11 +18,11 @@ function statusBanner(d) {
   const msgs = {
     nao_iniciado: ['info', 'Comece pela Etapa 1: confira os dados e informe os boxes. O checklist é montado na hora.'],
     rascunho: ['info', 'Confira os dados da Etapa 1 e salve para liberar o checklist.'],
-    aguardando_conferencia: ['warn', 'Enviado para conferência. O coordenador vai analisar item a item; você recebe aviso se algo for devolvido.'],
-    em_conferencia: ['warn', 'O coordenador está conferindo o laudo.'],
+    aguardando_conferencia: ['warn', 'Enviado para validação. A franqueadora vai analisar item a item; se algo for devolvido, aparece aqui na sua área.'],
+    em_conferencia: ['warn', 'A franqueadora está validando o laudo.'],
     devolvido: ['err', 'Devolvido com pendências: só os itens devolvidos estão abertos para correção. Os aprovados continuam travados.'],
-    aprovado_coord: ['ok', 'Aprovado pelo coordenador. Segue para o responsável técnico.'],
-    revisao_tecnica: ['info', 'Em revisão técnica pelo engenheiro/arquiteto.'],
+    aprovado_coord: ['ok', 'Aprovado pela franqueadora. Segue para a revisão técnica.'],
+    revisao_tecnica: ['info', 'Em revisão técnica pela franqueadora (descrição, acessibilidade e ART/RRT).'],
     liberado_assinatura: ['ok', 'Laudo 100% validado! Os documentos estão liberados para assinatura gov.br.'],
     pronto_protocolo: ['ok', 'Documentos assinados. Protocole no SCE e registre o número aqui.'],
     protocolado: ['ok', 'Protocolado no SCE. Registre a exigência ou o resultado quando receber.'],
@@ -53,7 +53,7 @@ export async function home(id) {
   const st = d.statuses;
   const cont = Object.entries(st).filter(([, s]) => s.status !== 'completo').sort((a, b) => ({ erro: 0, parcial: 1, nao_iniciado: 2 }[a[1].status] - { erro: 0, parcial: 1, nao_iniciado: 2 }[b[1].status]));
   const pend = await queued((x) => x.url.includes(`/laudos/${id}/`));
-  const steps = [['Dados', !!d.data.etapa1?.savedAt], ['Fotos e equipamentos', d.progress >= 90], ['Conferência', ['aprovado_coord', 'revisao_tecnica', 'liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido'].includes(d.laudo.status)], ['Revisão do RT', ['liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido'].includes(d.laudo.status)], ['Assinatura', ['pronto_protocolo', 'protocolado', 'deferido'].includes(d.laudo.status)], ['Protocolo', ['protocolado', 'deferido'].includes(d.laudo.status)]];
+  const steps = [['Dados', !!d.data.etapa1?.savedAt], ['Fotos e equipamentos', d.progress >= 90], ['Validação', ['aprovado_coord', 'revisao_tecnica', 'liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido'].includes(d.laudo.status)], ['Revisão técnica', ['liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido'].includes(d.laudo.status)], ['Assinatura', ['pronto_protocolo', 'protocolado', 'deferido'].includes(d.laudo.status)], ['Protocolo', ['protocolado', 'deferido'].includes(d.laudo.status)]];
   const lastSave = d.photos.map((p) => p.created_at).concat([d.data.etapa1?.savedAt]).filter(Boolean).sort().pop();
   return {
     title: 'Início', ctx: ctxOf(d),
@@ -64,19 +64,18 @@ export async function home(id) {
       ${pend.length ? html`<div class="note warn">${pend.length} foto(s) aguardando envio neste aparelho. Mantenha a página aberta até subirem.</div>` : ''}
       <div class="row" style="margin-top:6px">
         ${!d.data.etapa1?.savedAt ? html`<a class="btn brand lg" href="#/laudo/${id}/dados">Começar: dados do processo</a>` : html`<a class="btn brand" href="#/laudo/${id}/checklist">Ver checklist</a>`}
-        ${d.perms.storeRole === 'loja' ? html`<a class="btn" href="#/laudo/${id}/equipe">Convidar alguém da equipe</a>` : ''}
         <a class="btn" href="/api/laudos/${id}/checklist.pdf" target="_blank">Checklist em PDF</a></div></div>
     ${d.data.etapa1?.savedAt ? html`<div class="card pad0"><div style="padding:14px 16px 4px"><h3>Continue de onde parou</h3></div>
       ${cont.length ? cont.slice(0, 12).map(([k, s]) => { const it = ITEM(k); return html`<a class="irow ${locked(d, k) ? 'locked' : ''}" href="#/laudo/${id}/item/${k}"><div class="ic ${s.status}">${s.status === 'erro' ? '!' : s.status === 'parcial' ? '◐' : it.n}</div><div class="tx"><b>Anexo ${it.annex} · ${it.n}. ${it.title}</b><span>${itemStatusLabel[s.status]}${s.photosReq ? ` · ${s.photosDone} de ${s.photosReq} fotos` : ''}${s.errors ? ` · ${s.errors} erro(s)` : ''}</span></div>${reviewPill(s.review)}<span class="muted">›</span></a>`; })
-        : html`<div class="empty-state">Tudo preenchido! <a href="#/laudo/${id}/envio">Revise e envie para conferência</a>.</div>`}</div>` : ''}
+        : html`<div class="empty-state">Tudo preenchido! <a href="#/laudo/${id}/envio">Revise e envie para validação</a>.</div>`}</div>` : ''}
     ${d.laudo.status === 'devolvido' || d.laudo.status === 'exigencia' ? devolvidos(d) : ''}`,
   };
 }
 function devolvidos(d) {
   const dev = Object.entries(d.reviews).filter(([, r]) => r.status === 'devolvido');
   if (!dev.length) return '';
-  return html`<div class="card"><h3>Itens para corrigir (${dev.length})</h3>${dev.map(([k, r]) => { const it = ITEM(k); return html`<a class="irow" href="#/laudo/${d.laudo.id}/item/${k}"><div class="ic erro">!</div><div class="tx"><b>${it.annex} · ${it.n}. ${it.title}</b><span class="e">${r.reason}${r.comment ? ' — ' + r.comment : ''}</span><span>${r.stage === 'rt' ? 'Devolvido pelo engenheiro' : r.stage === 'cet' ? 'Exigência da CET-MG' : 'Devolvido pelo coordenador'} · ${fmtDT(r.at)}</span></div><span class="btn sm">Corrigir</span></a>`; })}
-    <a class="btn brand" href="#/laudo/${d.laudo.id}/envio" style="margin-top:10px">Reenviar para conferência</a></div>`;
+  return html`<div class="card"><h3>Itens para corrigir (${dev.length})</h3>${dev.map(([k, r]) => { const it = ITEM(k); return html`<a class="irow" href="#/laudo/${d.laudo.id}/item/${k}"><div class="ic erro">!</div><div class="tx"><b>${it.annex} · ${it.n}. ${it.title}</b><span class="e">${r.reason}${r.comment ? ' — ' + r.comment : ''}</span><span>${r.stage === 'cet' ? 'Exigência da CET-MG' : 'Devolvido pela franqueadora'} · ${fmtDT(r.at)}</span></div><span class="btn sm">Corrigir</span></a>`; })}
+    <a class="btn brand" href="#/laudo/${d.laudo.id}/envio" style="margin-top:10px">Reenviar para validação</a></div>`;
 }
 
 // ---------- Etapa 1 (B.12) ----------
@@ -117,7 +116,7 @@ export async function etapa1(id) {
           <div><label class="f">CPF do representante</label><input name="empresa.repCpf" value="${cpfMask(emp.repCpf)}" inputmode="numeric" ${ro ? 'disabled' : ''}><div class="hint">A Receita mostra o CPF mascarado: digite o CPF completo.</div></div>
           <div><label class="f">Cargo/função</label><input name="empresa.repRole" value="${emp.repRole || ''}" ${ro ? 'disabled' : ''}></div>
           <div><label class="f">E-mail e WhatsApp do contato</label><div class="row" style="flex-wrap:nowrap"><input name="empresa.contactEmail" value="${emp.contactEmail || ''}" ${ro ? 'disabled' : ''}><input name="empresa.contactPhone" value="${emp.contactPhone || ''}" ${ro ? 'disabled' : ''}></div></div>
-          <div style="grid-column:1/-1"><label class="f">Responsável técnico (engenheiro/arquiteto)</label><div class="row" style="flex-wrap:nowrap"><select name="rt_id" ${ro ? 'disabled' : ''}><option value="">Selecione</option>${d.rts.map((r) => html`<option value="${r.id}" ${r.id === d.laudo.rt_id ? 'selected' : ''}>${r.name} · ${r.council} ${r.reg_number}${r.validated ? ' ✓' : ''}</option>`)}</select>${ro ? '' : html`<a class="btn" href="#/laudo/${id}/rts">+ Cadastrar outro RT</a>`}</div><div class="hint">O RT recebe um link pessoal e só vê os laudos atribuídos a ele. O coordenador confere o registro no CREA/CAU.</div></div>
+          <div style="grid-column:1/-1"><label class="f">Responsável técnico (engenheiro/arquiteto)</label><div class="row" style="flex-wrap:nowrap"><select name="rt_id" ${ro ? 'disabled' : ''}><option value="">Selecione</option>${d.rts.map((r) => html`<option value="${r.id}" ${r.id === d.laudo.rt_id ? 'selected' : ''}>${r.name} · ${r.council} ${r.reg_number}${r.validated ? ' ✓' : ''}</option>`)}</select>${ro ? '' : html`<a class="btn" href="#/laudo/${id}/rts">+ Cadastrar outro RT</a>`}</div><div class="hint">A franqueadora confere o registro no CREA/CAU. O RT não precisa de acesso ao sistema.</div></div>
         </div></div>
       ${ro ? '' : html`<div class="row"><button class="btn brand lg">Salvar e gerar checklist</button><button type="button" class="btn" id="geo">Usar minha localização como endereço da unidade</button></div>`}
       </div>
@@ -145,18 +144,20 @@ export async function checklist(id) {
   const d = await load(id);
   const cl = d.checklist;
   const stCls = { pronto: 'completo', parcial: 'parcial', erro: 'erro', faltando: '', pendente: '', opcional: '' };
+  const royal = (d.store.brand.slug === 'royal');
   const link = (r) => r.key.startsWith('doc:') || r.key.startsWith('cert:') ? (r.key === 'doc:veracidade' ? `#/laudo/${id}/envio` : r.key.startsWith('cert:') ? `#/laudo/${id}/equipamentos` : `#/laudo/${id}/documentos`) : `#/laudo/${id}/item/${r.link || r.key}`;
-  const wpp = `https://wa.me/?text=${encodeURIComponent(`Checklist do laudo ${d.laudo.code} (${d.store.fantasia}): ${location.origin}/api/laudos/${id}/checklist.pdf\nAcesse o sistema pelo seu link pessoal para enviar as fotos.`)}`;
   return {
     title: 'Checklist do franqueado', ctx: ctxOf(d),
     body: html`${!d.data.etapa1?.savedAt ? html`<div class="note warn">Salve a <a href="#/laudo/${id}/dados">Etapa 1</a> para montar o checklist com as quantidades da sua unidade.</div>` : ''}
-    <div class="card"><div class="row between"><div><b>${cl.done} de ${cl.total} itens prontos</b> <span class="muted">(${cl.pct}%)</span></div><div class="row"><a class="btn sm" href="/api/laudos/${id}/checklist.pdf" target="_blank">PDF para imprimir</a><a class="btn sm" href="${wpp}" target="_blank" rel="noopener">Enviar por WhatsApp</a></div></div>${bar(cl.pct, true)}
+    <div class="card"><div class="kicker">Checklist do franqueado</div><div class="row between"><div><b class="brand-title" style="font-size:18px">${cl.done} de ${cl.total} itens prontos</b> <span class="muted">(${cl.pct}%)</span></div><div class="row"><a class="btn sm" href="/api/laudos/${id}/checklist.pdf" target="_blank">PDF para imprimir</a><button class="btn sm" id="copyCl">Copiar link do checklist</button></div></div>${bar(cl.pct, true)}
       <div class="seg" id="flt" style="margin-top:12px"><button class="on" data-v="">Todos</button><button data-v="faltando">Faltando</button><button data-v="erro">Com erro</button><button data-v="pronto">Prontos</button></div></div>
-    ${cl.blocks.map((b) => html`<div class="card pad0"><div class="row between" style="padding:14px 16px 6px"><h3 style="margin:0">${b.id} · ${b.title}</h3><span class="small muted">${b.done}/${b.total}</span></div>
-      ${b.rows.map((r) => html`<a class="irow" href="${link(r)}" data-st="${r.status}"><div class="ic ${stCls[r.status]}">${r.status === 'pronto' ? '✓' : r.status === 'erro' ? '!' : r.status === 'parcial' ? '◐' : '○'}</div>
+    ${cl.blocks.map((b) => html`<div class="card pad0"><div class="row between" style="padding:16px 16px 8px;align-items:flex-end"><div><div class="kicker">Bloco ${b.id}</div><h3 class="ds-block-title brand-title">${b.title}</h3></div><span class="small muted">${b.done} de ${b.total}</span></div>
+      ${b.rows.map((r) => html`<a class="irow" href="${link(r)}" data-st="${r.status}"><div class="ic ${stCls[r.status]}">${r.status === 'pronto' ? '✓' : r.status === 'erro' ? '!' : r.status === 'parcial' ? (royal ? '◆' : '◐') : ''}</div>
         <div class="tx"><b>${r.title}${r.qty ? html` <span class="pill">${r.qty}</span>` : ''}</b>${r.min ? html`<span>Mínimo: ${r.min}</span>` : ''}${r.tip ? html`<span>💡 ${r.tip}</span>` : ''}${r.progress ? html`<span>${r.progress}</span>` : ''}
         ${(r.errors || []).slice(0, 2).map((e) => html`<span class="e">${e}</span>`)}</div><span class="pill ${r.status === 'pronto' ? 'ok' : r.status === 'erro' ? 'err' : r.status === 'parcial' ? 'warn' : ''}">${itemStatusLabel[r.status] || r.status}</span></a>`)}</div>`)}`,
     mount(root) {
+      const cc = root.querySelector('#copyCl');
+      if (cc) cc.onclick = async () => { try { await navigator.clipboard.writeText(`Checklist do ${d.laudo.code} (${d.store.fantasia}): ${location.origin}/api/laudos/${id}/checklist.pdf`); toast('Link do checklist copiado.', 'ok'); } catch { toast('Não foi possível copiar.', 'err'); } };
       root.querySelectorAll('#flt button').forEach((b) => (b.onclick = () => {
         root.querySelectorAll('#flt button').forEach((x) => x.classList.remove('on')); b.classList.add('on');
         const v = b.dataset.v; root.querySelectorAll('.irow').forEach((r) => (r.hidden = v && !(r.dataset.st === v || (v === 'faltando' && ['faltando', 'parcial', 'pendente'].includes(r.dataset.st)))));
@@ -287,7 +288,7 @@ export async function itemView(id, k) {
     <div class="row" style="margin-bottom:10px"><span class="num-badge">${it.n}</span><h2 class="brand-title" style="margin:0;flex:1">${it.title}</h2>${reviewPill(rv)}<span class="pill ${st.status === 'completo' ? 'ok' : st.status === 'erro' ? 'err' : st.status === 'parcial' ? 'warn' : ''}">${itemStatusLabel[st.status] || ''}${st.photosReq ? ` · ${st.photosDone} de ${st.photosReq} fotos` : ''}</span></div>
     ${others.length ? html`<div class="note warn" style="margin-bottom:10px">${others.map((o) => o.name).join(', ')} também está neste item agora. Fotos nunca se sobrescrevem; nos campos vale a última alteração.</div>` : ''}
     ${rv && rv.status === 'devolvido' ? html`<div class="note err" style="margin-bottom:10px"><b>Devolvido: ${rv.reason}</b>${rv.comment ? ' — ' + rv.comment : ''}<br><span class="small">${rv.by} · ${fmtDT(rv.at)}</span></div>` : ''}
-    ${!editable ? html`<div class="note" style="margin-bottom:10px">🔒 Este item está travado ${rv?.status === 'aprovado' ? '(aprovado)' : 'nesta etapa'}.${d.perms.storeRole === 'colaborador' && !d.perms.blocks.includes(isA2 ? 'B' : 'C') ? ' O franqueado não liberou este bloco para você.' : ''}</div>` : ''}
+    ${!editable ? html`<div class="note" style="margin-bottom:10px">🔒 Este item está travado ${rv?.status === 'aprovado' ? '(aprovado)' : 'nesta etapa'}.</div>` : ''}
     <div class="note brand" style="margin-bottom:12px">${it.req}${it.tip ? html`<br><span class="small">💡 ${it.tip}</span>` : ''}</div>
     <div id="itemBody">${body}</div>
     <div class="card"><h3>Validação automática</h3>${issuesOf(d, k).length ? issueList(issuesOf(d, k)) : html`<div class="note ok">✓ Sem erros neste item.</div>`}
@@ -508,7 +509,7 @@ export async function documents(id) {
     title: 'Documentos (Bloco A)', ctx: ctxOf(d),
     body: html`${statusBanner(d)}<div class="card"><p class="small muted">Cada arquivo deve ter no máximo 3 MB (limite do SCE). Arquivos pesados, como vídeos, ficam no Google Drive.</p>
       ${rows.map((x) => html`${docLine(d, x.kind, x.title + (x.optional ? ' (quando exigido)' : ''), ed ? '' : 'disabled', x.kind === 'incendio')}<div class="small muted" style="margin:-6px 0 8px">${x.note}</div>`)}
-      <div class="list-item" style="padding-left:0"><div style="flex:1"><div class="t1">ART/RRT do laudo</div><div class="t2">${d.files.some((f) => f.kind === 'art') ? 'anexada pelo responsável técnico' : 'providenciada e anexada pelo responsável técnico na revisão técnica'}</div></div></div>
+      <div class="list-item" style="padding-left:0"><div style="flex:1"><div class="t1">ART/RRT do laudo</div><div class="t2">${d.files.some((f) => f.kind === 'art') ? 'anexada' : 'providenciada pelo RT e anexada pela loja ou pela franqueadora'}</div></div></div>
       <div class="list-item" style="padding-left:0"><div style="flex:1"><div class="t1">Certificados de calibração</div><div class="t2">ficam no cadastro de cada equipamento</div></div><a class="btn sm" href="#/laudo/${id}/equipamentos">Abrir equipamentos</a></div></div>
       ${d.files.some((f) => f.kind === 'planta') ? html`<div class="card"><h3>Planta enviada</h3><img src="${d.files.filter((f) => f.kind === 'planta').pop().url}?v=image" style="max-width:100%;border:1px solid var(--line);border-radius:8px" alt="Planta"><p class="small muted">Em cada item do Anexo II, use "Marcar na planta". Se a planta mudar, refaça as marcações.</p></div>` : ''}`,
     mount(root) {
@@ -617,17 +618,17 @@ export async function submit(id) {
   const where = (i) => i.item ? `#/laudo/${id}/item/${i.item}` : `#/laudo/${id}/dados`;
   const fixedAll = isResub ? dev.every(([k]) => d.statuses[k]?.status === 'completo') : true;
   return {
-    title: 'Envio para conferência', ctx: ctxOf(d),
+    title: 'Envio para validação', ctx: ctxOf(d),
     body: html`${statusBanner(d)}
     <div class="grid g3" style="margin-bottom:14px"><div class="kpi"><div class="l">Erros bloqueantes</div><div class="v" style="color:${B.length ? 'var(--err)' : 'var(--ok)'}">${B.length}</div></div><div class="kpi"><div class="l">Alertas (exigem justificativa)</div><div class="v" style="color:${A.length ? 'var(--warn)' : 'var(--ok)'}">${A.length}</div></div><div class="kpi"><div class="l">Progresso</div><div class="v">${d.progress}%</div></div></div>
     ${B.length ? html`<div class="card"><h3>Erros bloqueantes (vermelho) — impedem o envio</h3>${B.map((i) => html`<a class="issue B" href="${where(i)}" style="text-decoration:none"><span class="code">${i.code}</span><span style="flex:1">${i.item ? html`<b>${ITEM(i.item)?.short}:</b> ` : ''}${i.msg}</span><span>Corrigir ›</span></a>`)}</div>` : html`<div class="note ok" style="margin-bottom:14px">✓ Nenhum erro bloqueante.</div>`}
     ${A.length ? html`<div class="card"><h3>Alertas (amarelo) — podem seguir com justificativa</h3>${A.map((i) => html`<div class="issue A" style="display:block"><div class="row"><span class="code">${i.code}</span><span style="flex:1">${i.item ? html`<b>${ITEM(i.item)?.short}:</b> ` : ''}${i.msg}</span></div>
-      <input class="just" data-id="${i.id}" style="margin-top:6px;background:#fff" placeholder="Justificativa (obrigatória)" value="${d.alertsJust[i.id]?.just || ''}" ${canSubmit ? '' : 'disabled'}>${d.alertsJust[i.id]?.accepted_at ? html`<div class="small" style="color:var(--ok)">✓ aceito pelo coordenador</div>` : ''}</div>`)}</div>` : ''}
+      <input class="just" data-id="${i.id}" style="margin-top:6px;background:#fff" placeholder="Justificativa (obrigatória)" value="${d.alertsJust[i.id]?.just || ''}" ${canSubmit ? '' : 'disabled'}>${d.alertsJust[i.id]?.accepted_at ? html`<div class="small" style="color:var(--ok)">✓ aceito pela franqueadora</div>` : ''}</div>`)}</div>` : ''}
     ${isResub ? html`<div class="card"><h3>Itens devolvidos</h3>${dev.length ? dev.map(([k, r]) => html`<div class="list-item"><span class="dot ${d.statuses[k]?.status === 'completo' ? 'ok' : 'err'}"></span><div style="flex:1"><div class="t1">${ITEM(k).short}</div><div class="t2">${r.reason}</div></div><a class="btn sm" href="#/laudo/${id}/item/${k}">Abrir</a></div>`) : html`<p class="muted">—</p>`}</div>` : ''}
     ${canSubmit ? html`<div class="card"><h3>Declaração de veracidade</h3><label class="check" style="align-items:flex-start"><input type="checkbox" id="ver"> <span>Declaro, como representante legal (${d.data.empresa?.repName || d.store.rep_name}), que as informações, medidas, fotos e vídeos apresentados são verdadeiros e retratam a situação atual da unidade. Este aceite fica registrado no histórico.</span></label>
-      <button class="btn brand lg block" id="send" style="margin-top:12px" ${B.length ? 'disabled' : ''}>${isResub ? 'Reenviar para conferência' : 'Enviar para conferência'}</button>
+      <button class="btn brand lg block" id="send" style="margin-top:12px" ${B.length ? 'disabled' : ''}>${isResub ? 'Reenviar para validação' : 'Enviar para validação'}</button>
       ${B.length ? html`<p class="small muted center">O botão habilita quando não houver erro bloqueante.</p>` : ''}</div>`
-      : d.perms.storeRole === 'colaborador' ? html`<div class="note">Somente o franqueado envia para conferência.</div>` : ''}
+      : ''}
     <div class="card"><h3>Prévia dos documentos</h3><div class="row"><a class="btn" target="_blank" href="/api/laudos/${id}/preview/a2">Prévia do Anexo II</a><a class="btn" target="_blank" href="/api/laudos/${id}/preview/a3">Prévia do Anexo III</a></div><p class="small muted">A versão final é gerada e travada só quando o laudo estiver 100% validado.</p></div>`,
     mount(root) {
       root.querySelectorAll('.just').forEach((i) => (i.onchange = () => post(`/api/laudos/${id}/alerts/${encodeURIComponent(i.dataset.id)}/justify`, { just: i.value }).catch(showErr)));
@@ -636,7 +637,7 @@ export async function submit(id) {
         for (const i of root.querySelectorAll('.just')) if (!i.value.trim()) return toast('Justifique todos os alertas.', 'err');
         if (!root.querySelector('#ver').checked) return toast('Aceite a declaração de veracidade.', 'err');
         s.disabled = true;
-        try { for (const i of root.querySelectorAll('.just')) await post(`/api/laudos/${id}/alerts/${encodeURIComponent(i.dataset.id)}/justify`, { just: i.value }); await post(`/api/laudos/${id}/submit`, { veracidade: true }); toast('Enviado para conferência!', 'ok'); location.hash = `#/laudo/${id}`; } catch (e) { showErr(e); s.disabled = false; }
+        try { for (const i of root.querySelectorAll('.just')) await post(`/api/laudos/${id}/alerts/${encodeURIComponent(i.dataset.id)}/justify`, { just: i.value }); await post(`/api/laudos/${id}/submit`, { veracidade: true }); toast('Enviado para validação da franqueadora!', 'ok'); location.hash = `#/laudo/${id}`; } catch (e) { showErr(e); s.disabled = false; }
       };
     },
   };
@@ -650,7 +651,7 @@ export async function signing(id) {
   const st = d.laudo.status;
   const lock = ['aprovado_coord', 'revisao_tecnica', 'liberado_assinatura'].includes(st) || st === 'em_conferencia' ? await get(`/api/laudos/${id}/sign-lock`).catch(() => null) : null;
   const pkg = ['liberado_assinatura', 'pronto_protocolo', 'protocolado', 'exigencia', 'deferido', 'indeferido'].includes(st) ? await get(`/api/laudos/${id}/package`).catch(() => null) : null;
-  const docCard = (k, title, who, can) => { const x = docs[k]; if (!x) return ''; const s = x.signed && !x.signed.invalidated_at ? x.signed : null; return html`<div class="card"><div class="row between"><div><b>${title}</b><div class="small muted">Assina: ${who}</div></div>${s ? html`<span class="pill ok">✓ Assinado e conferido</span>` : html`<span class="pill warn">Aguardando assinatura</span>`}</div>
+  const docCard = (k, title, who, can) => { const x = docs[k]; if (!x) return ''; const s = x.signed && !x.signed.invalidated_at ? x.signed : null; return html`<div class="card"><div class="row between"><div><b>${title}</b><div class="small muted">Assina: ${who}${k === 'a2' ? ' · o PDF assinado pelo RT é enviado pela loja ou pela franqueadora' : ''}</div></div>${s ? html`<span class="pill ok">✓ Assinado e conferido</span>` : html`<span class="pill warn">Aguardando assinatura</span>`}</div>
     ${s ? html`<p class="small" style="margin:8px 0 0">${s.method === 'firma' ? 'Firma reconhecida' : 'Assinatura gov.br válida'} · arquivo idêntico ao gerado · signatário ${s.signer || '—'} · ${fmtDT(s.at)} · ${fmtMB(s.size)}</p><a class="btn sm" href="/api/laudos/${id}/doc/${k}?signed=1" style="margin-top:6px">Baixar assinado</a>`
       : can ? html`<div class="row" style="margin-top:10px"><a class="btn" href="/api/laudos/${id}/doc/${k}">1. Baixar PDF para assinar</a><a class="btn" href="https://assinador.iti.br/" target="_blank" rel="noopener">2. Abrir assinador gov.br ↗</a><button class="btn primary" data-up="${k}">3. Enviar PDF assinado</button>${k === 'a3' ? html`<button class="btn" data-firma="a3">Enviar via com firma reconhecida</button>` : ''}</div>
         <div class="note small" style="margin-top:8px">Assine no gov.br <b>sem abrir e salvar o arquivo em outro programa</b>. Se o arquivo for alterado, o sistema recusa.</div>
@@ -672,7 +673,7 @@ export async function signing(id) {
     ${d.laudo.exigencia ? html`<div class="card"><h3>Exigência da CET-MG</h3><p>${d.laudo.exigencia.texto}</p><p class="small muted">Recebida ${fmtDate(d.laudo.exigencia.data)} · prazo ${fmtDate(d.laudo.exigencia.prazo)} (${Math.ceil((new Date(d.laudo.exigencia.prazo) - Date.now()) / 86400000)} dias) · itens afetados: ${(d.laudo.exigencia.items || []).map((k) => ITEM(k).short).join(', ') || 'a definir pela franqueadora/coordenador'}</p>
       ${d.perms.exigenciaItems && !(d.laudo.exigencia.items || []).length ? html`<form id="xf"><div class="grid g2">${['II', 'III'].map((a) => html`<div><h4>Anexo ${a}</h4>${(a === 'II' ? S.cat.A2 : S.cat.A3).filter((i) => d.scope.includes(i.key)).map((i) => html`<label class="check" style="display:flex;margin:4px 0"><input type="checkbox" value="${i.key}"> ${i.n}. ${i.title}</label>`)}</div>`)}</div><button class="btn danger">Reabrir só estes itens</button></form>` : ''}</div>` : ''}
     ${d.laudo.result ? html`<div class="card"><h3>${d.laudo.result.result === 'deferido' ? '✓ Deferido' : 'Indeferido'}</h3><p>${d.laudo.result.portaria || ''} ${d.laudo.result.validade ? '· válido até ' + fmtDate(d.laudo.result.validade) : ''}</p>${d.laudo.result.obs ? html`<p class="small">${d.laudo.result.obs}</p>` : ''}</div>` : ''}
-    ${!lock && !pkg && !d.laudo.protocol ? html`<div class="card empty-state">A assinatura é liberada quando o laudo estiver 100% validado: aprovado pelo coordenador e revisado pelo engenheiro.</div>` : ''}`,
+    ${!lock && !pkg && !d.laudo.protocol ? html`<div class="card empty-state">A assinatura é liberada quando o laudo estiver 100% validado: validado pela franqueadora e com a revisão técnica concluída.</div>` : ''}`,
     mount(root) {
       const refresh = () => import('../app.js').then((m) => m.render());
       const showRes = (k, checks, ok) => { const el = root.querySelector('#res-' + k); if (el) el.innerHTML = String(html`<div class="note ${ok ? 'ok' : 'err'}" style="margin-top:8px">${(checks || []).map((c) => html`<div>${c.ok ? '✓' : '✗'} ${c.msg}</div>`)}</div>`); };
@@ -716,34 +717,13 @@ export async function timeline(id) {
   return { title: 'Linha do tempo do laudo', ctx: ctxOf(d), body: html`<div class="card pad0">${tl.map((r) => html`<div class="list-item"><span class="dot info"></span><div style="flex:1"><div class="t1">${r.action}${r.item ? ' · ' + (ITEM(r.item)?.short || r.item) : ''}</div><div class="t2">${r.user_name || 'sistema'} · ${fmtDT(r.at)}${r.after && r.after.status ? ' → ' + r.after.status : ''}</div></div></div>`)}</div>` };
 }
 
-// ---------- Equipe (B.11) e RTs ----------
-export async function team(id) {
-  const d = await load(id);
-  const list = await get(`/api/stores/${d.store.id}/team`);
-  const isOwner = d.perms.storeRole === 'loja' || d.perms.admin;
-  const bl = { A: 'Documentos', B: 'Fotos da infraestrutura', C: 'Equipamentos' };
-  return {
-    title: 'Equipe da loja', ctx: ctxOf(d),
-    body: html`<div class="card"><h3>Convidar colaborador</h3><p class="small muted">Colaboradores tiram fotos e preenchem os blocos liberados, mas não enviam para conferência nem assinam.</p>
-      ${isOwner ? html`<form id="inv" class="grid g3"><div><label class="f">Nome</label><input name="name" required></div><div><label class="f">WhatsApp</label><input name="phone"></div><div><label class="f">E-mail</label><input name="email" type="email"></div>
-        <div style="grid-column:1/-1">${Object.entries(bl).map(([k, l]) => html`<label class="check"><input type="checkbox" name="blocks" data-multi="1" value="${k}" ${k === 'B' ? 'checked' : ''}> ${l}</label>`)}</div><div><button class="btn brand">Enviar convite</button></div></form>` : html`<p class="muted">Somente o franqueado convida colaboradores.</p>`}</div>
-    <div class="card pad0">${list.map((u) => html`<div class="list-item"><div class="avatar">${(u.name || '?')[0]}</div><div style="flex:1"><div class="t1">${u.name} ${u.kind === 'loja' ? html`<span class="pill">franqueado</span>` : ''}${!u.active ? html` <span class="pill err">inativo</span>` : ''}</div><div class="t2">${[u.phone, u.email].filter(Boolean).join(' · ')} · ${u.link_opened_at ? 'acessou ' + fmtDT(u.last_access_at) : 'ainda não abriu o link'}${u.kind === 'colaborador' ? ' · blocos: ' + u.blocks.map((b) => bl[b]).join(', ') : ''}</div></div>
-      ${isOwner && u.kind === 'colaborador' ? html`<button class="btn sm" data-tog="${u.id}" data-a="${u.active ? 0 : 1}">${u.active ? 'Desativar' : 'Reativar'}</button><button class="btn sm" data-rev="${u.id}">Novo link</button>` : ''}</div>`)}</div>`,
-    mount(root) {
-      const refresh = () => import('../app.js').then((m) => m.render());
-      const f = root.querySelector('#inv');
-      if (f) f.onsubmit = async (e) => { e.preventDefault(); try { const r = await post(`/api/stores/${d.store.id}/team`, readForm(f)); modal({ title: 'Convite enviado', body: html`<p>Link pessoal do colaborador:</p><input readonly value="${r.link}" onclick="this.select()">` }); refresh(); } catch (er) { showErr(er); } };
-      root.querySelectorAll('[data-tog]').forEach((b) => (b.onclick = async () => { await put(`/api/stores/${d.store.id}/team/${b.dataset.tog}`, { active: !!+b.dataset.a }); refresh(); }));
-      root.querySelectorAll('[data-rev]').forEach((b) => (b.onclick = async () => { const r = await post(`/api/users/${b.dataset.rev}/revoke-link`); modal({ title: 'Novo link gerado', body: html`<input readonly value="${r.link}">` }); }));
-    },
-  };
-}
+// ---------- Responsáveis técnicos (cadastro, sem acesso ao sistema) ----------
 export async function rtsView(id) {
   const d = await load(id);
   return {
     title: 'Responsáveis técnicos', ctx: ctxOf(d),
-    body: html`<div class="card pad0">${d.rts.map((r) => html`<div class="list-item"><div class="avatar">${r.name[0]}</div><div style="flex:1"><div class="t1">${r.name} ${r.id === d.laudo.rt_id ? html`<span class="pill info">indicado neste laudo</span>` : ''}</div><div class="t2">${r.council} ${r.reg_number} / ${r.uf} · ${r.validated ? '✓ registro validado pelo coordenador' : 'registro ainda não validado'}</div></div></div>`)}</div>
-    ${d.perms.storeRole === 'loja' || d.perms.admin ? html`<div class="card"><h3>Cadastrar novo RT</h3><p class="small muted">Pode ser um engenheiro diferente por loja, interno ou externo. Ele recebe um link pessoal e só vê os laudos atribuídos a ele.</p>
+    body: html`<div class="card pad0">${d.rts.map((r) => html`<div class="list-item"><div class="avatar">${r.name[0]}</div><div style="flex:1"><div class="t1">${r.name} ${r.id === d.laudo.rt_id ? html`<span class="pill info">indicado neste laudo</span>` : ''}</div><div class="t2">${r.council} ${r.reg_number} / ${r.uf} · ${r.validated ? '✓ registro validado pela franqueadora' : 'registro ainda não validado'}</div></div></div>`)}</div>
+    ${d.perms.storeRole === 'loja' || d.perms.admin || has('franqueadora') ? html`<div class="card"><h3>Cadastrar novo RT</h3><p class="small muted">Pode ser um engenheiro ou arquiteto diferente por loja. Ele não acessa o sistema: os dados entram no Anexo II e a ART/RRT e o PDF assinado por ele são anexados pela loja ou pela franqueadora.</p>
       <form id="rf" class="grid g3"><div><label class="f">Nome *</label><input name="name" required></div><div><label class="f">CPF</label><input name="cpf"></div><div><label class="f">Conselho *</label><select name="council"><option>CREA</option><option>CAU</option></select></div><div><label class="f">Nº de registro *</label><input name="reg_number" required></div><div><label class="f">UF</label><input name="uf" value="MG"></div><div><label class="f">E-mail</label><input name="email" type="email"></div><div><label class="f">WhatsApp</label><input name="phone"></div><div style="align-self:end"><button class="btn brand block">Cadastrar e indicar</button></div></form></div>` : ''}`,
     mount(root) {
       const f = root.querySelector('#rf');

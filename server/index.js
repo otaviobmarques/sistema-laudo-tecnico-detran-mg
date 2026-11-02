@@ -1,4 +1,4 @@
-// Sistema de Laudo Técnico ECV — servidor web.
+// Projeto Técnico DETRAN MG — servidor web.
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
@@ -94,25 +94,6 @@ app.post('/api/auth/admin-login', (req, res) => {
   SV.audit(req, 'acesso.admin', { entity: 'user', entityId: u.id });
   res.json({ ok: true });
 });
-app.post('/api/auth/request-link', (req, res) => {
-  const q = String(req.body.cnpjOrPhone || '').replace(/\D/g, '');
-  let users = [];
-  if (q.length === 14) {
-    const s = one('SELECT * FROM stores WHERE cnpj=? AND deleted_at IS NULL', q);
-    if (s) users = all("SELECT u.* FROM users u JOIN store_users su ON su.user_id=u.id WHERE su.store_id=? AND su.kind='loja' AND u.active=1", s.id);
-  } else if (q.length >= 10) {
-    users = all('SELECT * FROM users WHERE active=1 AND deleted_at IS NULL').filter((u) => String(u.phone || '').replace(/\D/g, '').endsWith(q.slice(-10)) && !L.isAdmin(u));
-  }
-  for (const u of users) {
-    const brandStore = one('SELECT s.brand_id, s.id FROM store_users su JOIN stores s ON s.id=su.store_id WHERE su.user_id=? LIMIT 1', u.id);
-    const ch = u.phone ? 'whatsapp' : 'email';
-    SV.notify({ channel: ch, to: u.phone || u.email, toName: u.name, subject: 'Seu link de acesso', body: `Olá, ${u.name.split(' ')[0]}! Aqui está o seu link pessoal de acesso ao Laudo ECV:\n${linkFor(req, u)}\nNão encaminhe este link: ele é pessoal.`, brandId: brandStore?.brand_id, storeId: brandStore?.id, kind: 'novo_link' });
-    if (u.email && ch !== 'email') SV.notify({ channel: 'email', to: u.email, toName: u.name, subject: 'Seu link de acesso', body: `Link pessoal: ${linkFor(req, u)}`, brandId: brandStore?.brand_id, kind: 'novo_link' });
-    SV.audit({ ...req, user: u, via: 'pedido' }, 'acesso.pedido_link', { entity: 'user', entityId: u.id });
-  }
-  SV.audit({ ...req, publicActor: 'público' }, 'acesso.pedido_link.consulta', { after: { q: q.slice(0, 4) + '…', encontrados: users.length } });
-  res.json({ ok: true, msg: 'Se o dado informado estiver cadastrado, enviamos um novo link para o WhatsApp e o e-mail já cadastrados.' });
-});
 app.post('/api/auth/logout', (req, res) => { if (req.cookies.sid) run('DELETE FROM sessions WHERE id=?', req.cookies.sid); res.clearCookie('sid'); res.json({ ok: true }); });
 
 app.get('/api/me', (req, res) => {
@@ -131,8 +112,9 @@ app.post('/api/me/accept-terms', need(), (req, res) => {
 
 // ---------------- Catálogo e parâmetros ----------------
 app.get('/api/catalog', (req, res) => {
+  const params = R.getParams();
   res.json({ A2: C.A2, A3: C.A3, ELEVACAO: C.ELEVACAO, DOCS: C.DOCS, PROCESS_TYPES: C.PROCESS_TYPES, PORTE_LABEL: C.PORTE_LABEL, STATUS: L.STATUS,
-    params: R.getParams(), photoSlotsEq: Object.fromEntries(Object.keys(C.EQ_TYPES).map((t) => [t, C.equipmentPhotoSlots(t)])),
+    params, photoSlotsEq: Object.fromEntries(Object.keys(C.EQ_TYPES).map((t) => [t, C.equipmentPhotoSlots(t)])),
     returnReasons: ['Foto ilegível', 'Medida não visível na foto', 'Medida abaixo do mínimo', 'Certificado não corresponde ao equipamento', 'Certificado vencido', 'Placa fora do padrão', 'Foto repetida ou de outro local', 'Documento ausente ou ilegível', 'Número de série/patrimônio divergente', 'Outro'] });
 });
 app.get('/api/municipios', need(), (req, res) => {
@@ -248,18 +230,22 @@ function porteChangedNotify(req, storeIds, porte) {
     notifyFranqueadora(req, s, 'Porte alterado: ' + s.fantasia, msg);
   }
 }
-app.post('/api/stores/:id/send-link', need('franqueadora', 'admin'), (req, res) => {
+function linkMessage(req, s, fr, l, kind) {
+  const brand = L.brandOfStore(s);
+  const prazo = l && l.deadline ? ` até ${new Date(l.deadline).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}` : '';
+  const proc = l ? C.PROCESS_TYPES[l.process_type].toLowerCase() : 'projeto técnico';
+  return kind === 'cobranca'
+    ? `Olá, ${fr.name.split(' ')[0]}! Passando para lembrar do preenchimento do ${proc} da unidade ${s.fantasia} no Projeto Técnico DETRAN MG${prazo}. Continue de onde parou pelo seu link pessoal:\n${linkFor(req, fr)}`
+    : `Olá, ${fr.name.split(' ')[0]}! A ${brand.name} solicitou o preenchimento do ${proc} da unidade ${s.fantasia}${prazo}.\nO checklist já está pronto. Acesse pelo seu link pessoal (não encaminhe):\n${linkFor(req, fr)}`;
+}
+// O sistema não envia e-mail nem WhatsApp: gera o link e a mensagem pronta para a franqueadora copiar.
+app.post('/api/stores/:id/link', need('franqueadora', 'admin'), (req, res) => {
   const s = getStore(req, +req.params.id);
   const fr = one("SELECT u.* FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=? AND su.kind='loja'", s.id);
-  if (!fr) throw err(400, 'Cadastre o franqueado (nome e WhatsApp/e-mail) antes de enviar o link.');
-  const brand = L.brandOfStore(s);
+  if (!fr) throw err(400, 'Cadastre o franqueado (nome) antes de gerar o link.');
   const l = one(`SELECT * FROM laudos WHERE store_id=? AND deleted_at IS NULL AND status IN (${L.ACTIVE.map(() => '?').join(',')}) ORDER BY id DESC`, s.id, ...L.ACTIVE);
-  const ch = req.body.channel || 'whatsapp';
-  const body = req.body.message || `Olá, ${fr.name.split(' ')[0]}! A ${brand.name} solicitou o preenchimento do ${l ? C.PROCESS_TYPES[l.process_type].toLowerCase() : 'laudo'} da unidade ${s.fantasia}${l && l.deadline ? ` até ${new Date(l.deadline).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}` : ''}.\nAcesse pelo seu link pessoal (não encaminhe):\n${linkFor(req, fr)}`;
-  if (ch === 'copy') { SV.audit(req, 'link.copiar', { entity: 'user', entityId: fr.id, storeId: s.id }); return res.json({ ok: true, link: linkFor(req, fr) }); }
-  SV.notify({ channel: ch, to: ch === 'email' ? fr.email : fr.phone, toName: fr.name, subject: `${brand.name} · Laudo da unidade ${s.fantasia}`, body, brandId: s.brand_id, storeId: s.id, laudoId: l?.id, kind: req.body.kind || 'convite' });
-  SV.audit(req, req.body.kind === 'cobranca' ? 'cobranca.enviar' : 'link.enviar', { entity: 'user', entityId: fr.id, storeId: s.id, after: { canal: ch } });
-  res.json({ ok: true, link: linkFor(req, fr) });
+  SV.audit(req, req.body.kind === 'cobranca' ? 'cobranca.copiar' : 'link.copiar', { entity: 'user', entityId: fr.id, storeId: s.id });
+  res.json({ ok: true, link: linkFor(req, fr), message: linkMessage(req, s, fr, l, req.body.kind), name: fr.name, phone: fr.phone });
 });
 app.post('/api/users/:id/revoke-link', need('franqueadora', 'admin', 'loja'), (req, res) => {
   const u = one('SELECT * FROM users WHERE id=?', +req.params.id);
@@ -329,7 +315,7 @@ function toIsoDate(s) {
 
 // ---------------- Solicitação de preenchimento (B.8, B.9) ----------------
 app.post('/api/laudos/request', need('franqueadora', 'admin'), (req, res) => {
-  const { storeIds = [], process_type, deadline, scope_items, channel = 'whatsapp', send = true } = req.body;
+  const { storeIds = [], process_type, deadline, scope_items } = req.body;
   if (!C.PROCESS_TYPES[process_type]) throw err(400, 'Escolha o tipo de processo.');
   if (['alteracao_endereco', 'modificacao'].includes(process_type) && !(scope_items && scope_items.length)) throw err(400, 'Escolha os itens objeto da alteração/modificação (art. 45 §1º).');
   const out = [];
@@ -337,19 +323,31 @@ app.post('/api/laudos/request', need('franqueadora', 'admin'), (req, res) => {
     const s = getStore(req, +sid);
     try {
       const id = L.createLaudo(req, s, { process_type, deadline, scope_items });
-      out.push({ storeId: s.id, laudoId: id, ok: true });
-      if (send && channel !== 'none') {
-        const fr = one("SELECT u.* FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=? AND su.kind='loja'", s.id);
-        if (fr) {
-          const brand = L.brandOfStore(s);
-          SV.notify({ channel: channel === 'email' ? 'email' : 'whatsapp', to: channel === 'email' ? fr.email : fr.phone || fr.email, toName: fr.name, subject: `${brand.name} · ${C.PROCESS_TYPES[process_type]} da unidade ${s.fantasia}`,
-            body: `Olá, ${fr.name.split(' ')[0]}! A ${brand.name} solicitou o preenchimento do laudo de ${C.PROCESS_TYPES[process_type].toLowerCase()} da unidade ${s.fantasia}${deadline ? ` até ${new Date(deadline).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}` : ''}.\nSeu checklist já está pronto. Acesse pelo link pessoal (não encaminhe):\n${linkFor(req, fr)}`,
-            brandId: s.brand_id, storeId: s.id, laudoId: id, kind: 'convite' });
-        }
-      }
+      const fr = one("SELECT u.* FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=? AND su.kind='loja'", s.id);
+      out.push({ storeId: s.id, store: s.fantasia, laudoId: id, ok: true, link: fr ? linkFor(req, fr) : null, message: fr ? linkMessage(req, s, fr, one('SELECT * FROM laudos WHERE id=?', id)) : null, name: fr?.name });
     } catch (e) { out.push({ storeId: s.id, ok: false, error: e.message }); }
   }
   res.json(out);
+});
+app.delete('/api/stores/:id', need('franqueadora', 'admin'), (req, res) => {
+  const s = getStore(req, +req.params.id);
+  for (const l of all(`SELECT * FROM laudos WHERE store_id=? AND deleted_at IS NULL AND status IN (${L.ACTIVE.map(() => '?').join(',')})`, s.id, ...L.ACTIVE)) L.setStatus(req, l, 'cancelado', { cancel_reason: 'Loja excluída do sistema' });
+  update('stores', s.id, { deleted_at: now() });
+  // franqueados sem outra loja perdem o acesso (o link deixa de funcionar)
+  for (const u of all("SELECT u.* FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=?", s.id)) {
+    const other = one('SELECT COUNT(*) n FROM store_users su JOIN stores st ON st.id=su.store_id WHERE su.user_id=? AND st.deleted_at IS NULL', u.id).n;
+    if (!other && !L.isAdmin(u) && !L.has(u, 'franqueadora')) { update('users', u.id, { active: 0 }); run('DELETE FROM sessions WHERE user_id=?', u.id); }
+  }
+  insert('trash', { entity: 'store', entity_id: s.id, label: `Loja ${s.fantasia}`, deleted_at: now(), deleted_by: req.user.id });
+  SV.audit(req, 'loja.excluir', { entity: 'store', entityId: s.id, storeId: s.id, before: { fantasia: s.fantasia, cnpj: s.cnpj } });
+  res.json({ ok: true });
+});
+app.delete('/api/laudos/:id', need('franqueadora', 'admin'), (req, res) => {
+  const l = getLaudo(req, +req.params.id);
+  update('laudos', l.id, { deleted_at: now() });
+  insert('trash', { entity: 'laudo', entity_id: l.id, label: `Preenchimento ${l.code} (${L.STATUS[l.status]?.label})`, deleted_at: now(), deleted_by: req.user.id });
+  SV.audit(req, 'laudo.excluir', { entity: 'laudo', entityId: l.id, storeId: l.store_id, laudoId: l.id, before: { code: l.code, status: l.status } });
+  res.json({ ok: true });
 });
 app.post('/api/laudos/:id/cancel', need('franqueadora', 'admin'), (req, res) => {
   const l = getLaudo(req, +req.params.id);
@@ -446,7 +444,7 @@ function laudoPayload(req, l) {
   for (const it of C.ALL_ITEMS) editItems[it.key] = L.canEditItem(u, l, it.key);
   const versions = all('SELECT * FROM versions WHERE laudo_id=? ORDER BY n DESC', l.id).map((v) => ({ id: v.id, n: v.n, code: v.code, reason: v.reason, created_at: v.created_at, views: v.views, revoked: v.revoked, has_password: !!v.access_password, access_until: v.access_until,
     docs: Object.fromEntries(Object.entries(J(v.docs, {})).map(([k, d]) => [k, { size: d.size, sha: d.sha, level: d.level, generated_at: d.generated_at, signed: d.signed ? { at: d.signed.at, by: d.signed.by, method: d.signed.method, invalidated_at: d.signed.invalidated_at, signer: d.signed.signer, size: d.signed.size } : null }])) }));
-  const rtRole = (() => { if (!L.has(u, 'rt')) return false; const rt = one('SELECT id FROM rts WHERE user_id=?', u.id); return rt && rt.id === l.rt_id; })();
+  const rtRole = L.has(u, 'franqueadora') || L.isAdmin(u); // a franqueadora conduz a revisão técnica e envia o Anexo II assinado pelo RT
   const isCoord = L.has(u, 'coordenador') && (L.isAdmin(u) || store.coordinator_id === u.id || L.canSeeStore(u, store.id));
   const sr = L.storeRole(u, store.id);
   const rts = all('SELECT * FROM rts WHERE deleted_at IS NULL ORDER BY name').map((r) => ({ id: r.id, name: r.name, council: r.council, reg_number: r.reg_number, uf: r.uf, validated: !!r.validated_at }));
@@ -473,8 +471,8 @@ function laudoPayload(req, l) {
       review: (isCoord || L.isAdmin(u)) && ['aguardando_conferencia', 'em_conferencia'].includes(l.status),
       validateRt: isCoord || L.isAdmin(u),
       rtReview: (rtRole || L.isAdmin(u)) && l.status === 'revisao_tecnica',
-      signA2: (rtRole || L.isAdmin(u)) && l.status === 'liberado_assinatura',
-      signA3: (sr === 'loja' || L.isAdmin(u)) && l.status === 'liberado_assinatura',
+      signA2: (rtRole || sr === 'loja') && l.status === 'liberado_assinatura',
+      signA3: (sr === 'loja' || rtRole) && l.status === 'liberado_assinatura',
       protocol: (sr === 'loja' || L.isAdmin(u) || L.has(u, 'franqueadora')) && ['pronto_protocolo', 'protocolado', 'exigencia'].includes(l.status),
       exigenciaItems: (L.has(u, 'franqueadora') || isCoord || L.isAdmin(u)) && l.status === 'exigencia',
       cancel: L.has(u, 'franqueadora') || L.isAdmin(u),
@@ -642,8 +640,8 @@ app.post('/api/laudos/:id/files', need(), upload.single('file'), async (req, res
   if (!req.file) throw err(400, 'Envie o arquivo.');
   const okKinds = ['planta', 'art', 'plano_calibracao', 'doc_boroscopio', 'contrato_rede', 'contrato_internet', 'incendio', 'dgcv', 'protocolo', 'exigencia', 'video', 'outro'];
   if (!okKinds.includes(kind)) throw err(400, 'Tipo de documento inválido.');
-  const rtRole = L.has(req.user, 'rt') && one('SELECT id FROM rts WHERE user_id=?', req.user.id)?.id === l.rt_id;
-  if (kind === 'art') { if (!rtRole && !L.isAdmin(req.user)) throw err(403, 'A ART/RRT é anexada pelo responsável técnico.'); if (!['revisao_tecnica'].includes(l.status) && !L.isAdmin(req.user)) throw err(403, 'A ART/RRT é anexada na revisão técnica.'); }
+  const fq = L.has(req.user, 'franqueadora') || L.isAdmin(req.user);
+  if (kind === 'art') { const ok = (fq && !['liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido', 'indeferido', 'cancelado'].includes(l.status)) || (L.storeRole(req.user, l.store_id) === 'loja' && ['nao_iniciado', 'rascunho', 'em_preenchimento', 'devolvido'].includes(l.status)); if (!ok) throw err(403, 'A ART/RRT não pode ser alterada nesta etapa.'); }
   else if (['protocolo', 'exigencia'].includes(kind)) { if (!L.storeRole(req.user, l.store_id) && !L.isAdmin(req.user) && !L.has(req.user, 'franqueadora')) throw err(403, 'Sem permissão.'); }
   else {
     const itemFor = { doc_boroscopio: 'a3_3', contrato_rede: 'a3_15', contrato_internet: 'a3_17', incendio: 'a2_5', dgcv: 'a2_1', plano_calibracao: 'a3_1', video: req.body.item }[kind];
@@ -851,9 +849,7 @@ app.post('/api/rts', need('loja', 'franqueadora', 'admin'), (req, res) => {
   const b = req.body;
   if (!b.name || !b.reg_number || !b.council) throw err(400, 'Informe nome, conselho (CREA/CAU) e número de registro.');
   if (b.cpf && !R.validCPF(b.cpf)) throw err(400, 'CPF do RT inválido.');
-  if (!b.email && !b.phone) throw err(400, 'Informe e-mail ou WhatsApp para enviar o convite ao RT.');
-  const uid = insert('users', { name: b.name, email: b.email, phone: b.phone, cpf: String(b.cpf || '').replace(/\D/g, ''), roles: S(['rt']), token: token(), active: 1, created_at: now(), invited_by: req.user.id });
-  const id = insert('rts', { user_id: uid, name: b.name, cpf: String(b.cpf || '').replace(/\D/g, ''), council: b.council, reg_number: b.reg_number, uf: b.uf || 'MG', email: b.email, phone: b.phone, created_at: now() });
+  const id = insert('rts', { user_id: null, name: b.name, cpf: String(b.cpf || '').replace(/\D/g, ''), council: b.council, reg_number: b.reg_number, uf: b.uf || 'MG', email: b.email, phone: b.phone, created_at: now() });
   SV.audit(req, 'rt.criar', { entity: 'rt', entityId: id, after: { ...b, cpf: maskCpf(b.cpf) } });
   res.json(one('SELECT * FROM rts WHERE id=?', id));
 });
@@ -862,38 +858,6 @@ app.post('/api/rts/:id/validate', need('coordenador', 'admin'), (req, res) => {
   if (!r) throw err(404, 'RT não encontrado.');
   update('rts', r.id, req.body.undo ? { validated_by: null, validated_at: null } : { validated_by: req.user.id, validated_at: now() });
   SV.audit(req, req.body.undo ? 'rt.desvalidar' : 'rt.validar', { entity: 'rt', entityId: r.id, after: { registro: r.reg_number, conselho: r.council, consulta: req.body.note } });
-  res.json({ ok: true });
-});
-
-// ---------------- Equipe da loja (colaboradores, B.11) ----------------
-app.get('/api/stores/:id/team', need(), (req, res) => {
-  const s = getStore(req, +req.params.id);
-  res.json(all('SELECT u.id, u.name, u.email, u.phone, u.blocks, u.active, u.link_opened_at, u.last_access_at, su.kind FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=? AND u.deleted_at IS NULL', s.id).map((u) => ({ ...u, blocks: J(u.blocks, ['A', 'B', 'C']) })));
-});
-app.post('/api/stores/:id/team', need(), (req, res) => {
-  const s = getStore(req, +req.params.id);
-  requireStoreEditor(req, s.id);
-  const b = req.body;
-  if (!b.name || !(b.phone || b.email)) throw err(400, 'Informe nome e WhatsApp ou e-mail do colaborador.');
-  const uid = insert('users', { name: b.name, email: b.email, phone: b.phone, roles: S(['colaborador']), blocks: S(b.blocks && b.blocks.length ? b.blocks : ['B']), token: token(), active: 1, created_at: now(), invited_by: req.user.id });
-  run("INSERT INTO store_users (store_id, user_id, kind) VALUES (?,?,'colaborador')", s.id, uid);
-  const u = one('SELECT * FROM users WHERE id=?', uid);
-  const brand = L.brandOfStore(s);
-  SV.notify({ channel: b.phone ? 'whatsapp' : 'email', to: b.phone || b.email, toName: b.name, subject: `${brand.name} · convite para ajudar no laudo`, body: `Olá, ${b.name.split(' ')[0]}! ${req.user.name} convidou você para ajudar no laudo da unidade ${s.fantasia}. Seu link pessoal:\n${linkFor(req, u)}`, brandId: s.brand_id, storeId: s.id, kind: 'convite_colaborador' });
-  SV.audit(req, 'colaborador.convidar', { entity: 'user', entityId: uid, storeId: s.id, after: { name: b.name, blocks: b.blocks } });
-  res.json({ ok: true, link: linkFor(req, u) });
-});
-app.put('/api/stores/:id/team/:uid', need(), (req, res) => {
-  const s = getStore(req, +req.params.id);
-  requireStoreEditor(req, s.id);
-  const su = one("SELECT * FROM store_users WHERE store_id=? AND user_id=? AND kind='colaborador'", s.id, +req.params.uid);
-  if (!su) throw err(404, 'Colaborador não encontrado.');
-  const upd = {};
-  if ('blocks' in req.body) upd.blocks = S(req.body.blocks);
-  if ('active' in req.body) upd.active = req.body.active ? 1 : 0;
-  update('users', su.user_id, upd);
-  if (upd.active === 0) run('DELETE FROM sessions WHERE user_id=?', su.user_id);
-  SV.audit(req, 'colaborador.editar', { entity: 'user', entityId: su.user_id, storeId: s.id, after: req.body });
   res.json({ ok: true });
 });
 
@@ -949,9 +913,9 @@ app.post('/api/laudos/:id/submit', need(), (req, res) => {
 // ---------------- Conferência do coordenador (B.19, B.20) ----------------
 app.get('/api/queue', need('coordenador', 'admin'), (req, res) => {
   const ids = L.storeIdsForUser(req.user);
-  const st = req.query.status ? [req.query.status] : ['aguardando_conferencia', 'em_conferencia'];
+  const st = req.query.status ? [req.query.status] : ['aguardando_conferencia', 'em_conferencia', 'revisao_tecnica'];
   if (req.query.status === 'devolvidos') st.splice(0, 1, 'devolvido', 'exigencia');
-  if (req.query.status === 'aprovados') st.splice(0, 1, 'aprovado_coord', 'revisao_tecnica', 'liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido');
+  if (req.query.status === 'aprovados') st.splice(0, 1, 'aprovado_coord', 'liberado_assinatura', 'pronto_protocolo', 'protocolado', 'deferido');
   const rows = ids.length ? all(`SELECT * FROM laudos WHERE deleted_at IS NULL AND store_id IN (${ids.join(',')}) AND status IN (${st.map(() => '?').join(',')}) ORDER BY submitted_at`, ...st) : [];
   res.json(rows.filter((l) => !req.query.mine || l.coordinator_id === req.user.id).map((l) => {
     const r = L.laudoListRow(l);
@@ -1030,18 +994,13 @@ app.post('/api/laudos/:id/finish-review', need('coordenador', 'admin'), async (r
     if (data.rtReview) { data.rtReview.concludedAt = null; update('laudos', l.id, { data: S(data) }); }
     L.setStatus(req, one('SELECT * FROM laudos WHERE id=?', l.id), 'revisao_tecnica');
     const rt = l.rt_id ? one('SELECT r.*, u.token FROM rts r LEFT JOIN users u ON u.id=r.user_id WHERE r.id=?', l.rt_id) : null;
-    if (rt) SV.notify({ channel: 'email', to: rt.email || rt.phone, toName: rt.name, subject: `Laudo ${l.code} pronto para revisão técnica`, body: `O coordenador aprovou o laudo da unidade ${store.fantasia}. Faça a revisão técnica, a descrição das instalações e anexe a ART/RRT:\n${baseUrl(req)}/a/${rt.token}`, brandId: store.brand_id, storeId: store.id, laudoId: l.id, kind: 'revisao_rt' });
+    if (false) SV.notify({ channel: 'email', to: rt.email || rt.phone, toName: rt.name, subject: `Laudo ${l.code} pronto para revisão técnica`, body: `O coordenador aprovou o laudo da unidade ${store.fantasia}. Faça a revisão técnica, a descrição das instalações e anexe a ART/RRT:\n${baseUrl(req)}/a/${rt.token}`, brandId: store.brand_id, storeId: store.id, laudoId: l.id, kind: 'revisao_rt' });
     if (fr) SV.notify({ channel: 'whatsapp', to: fr.phone || fr.email, toName: fr.name, subject: `Laudo ${l.code} aprovado pelo coordenador`, body: 'Seu laudo foi aprovado pelo coordenador e seguiu para a revisão do responsável técnico.', brandId: store.brand_id, storeId: store.id, laudoId: l.id, kind: 'aprovado' });
   }
   res.json(laudoPayload(req, one('SELECT * FROM laudos WHERE id=?', l.id)));
 });
 
 // ---------------- Revisão técnica do RT (B.22) ----------------
-app.get('/api/rt/laudos', need('rt', 'admin'), (req, res) => {
-  const rt = one('SELECT * FROM rts WHERE user_id=?', req.user.id);
-  const rows = L.isAdmin(req.user) && !rt ? all("SELECT * FROM laudos WHERE status='revisao_tecnica' AND deleted_at IS NULL") : rt ? all('SELECT * FROM laudos WHERE rt_id=? AND deleted_at IS NULL ORDER BY id DESC', rt.id) : [];
-  res.json(rows.filter((l) => !['nao_iniciado', 'rascunho'].includes(l.status)).map(L.laudoListRow));
-});
 function baseDescription(ctx) {
   const f = (k) => ctx.data.items?.[k]?.fields || {};
   const cfg = ctx.cfg, Lb = +cfg.boxesLeves || 0, Pb = cfg.pesados ? +cfg.boxesPesados || 0 : 0;
@@ -1055,9 +1014,9 @@ Boxes de veículos leves: ${bx('a2_7', 'L', Lb) || '—'}.${Pb ? ` Boxes de veí
 
 Acesso por ${portoes || '—'}. Área de manobra com largura mínima de ${f('a2_10').largura || '?'} m.${ctx.porte && ctx.params.porte.vagasExigidas[ctx.porte] ? ` Estacionamento com ${(f('a2_6').vagas || []).length} vaga(s) de espera.` : ''} Equipamentos de prevenção e combate a incêndio instalados conforme a legislação vigente.`;
 }
-app.get('/api/laudos/:id/rt-base', need('rt', 'admin'), (req, res) => { const l = getLaudo(req, +req.params.id); res.json({ text: baseDescription(R.buildContext(l.id)) }); });
-const isRtOf = (req, l) => { if (L.isAdmin(req.user)) return true; const rt = one('SELECT id FROM rts WHERE user_id=?', req.user.id); return rt && rt.id === l.rt_id; };
-app.put('/api/laudos/:id/rt-review', need('rt', 'admin'), (req, res) => {
+app.get('/api/laudos/:id/rt-base', need('franqueadora', 'admin'), (req, res) => { const l = getLaudo(req, +req.params.id); res.json({ text: baseDescription(R.buildContext(l.id)) }); });
+const isRtOf = (req) => L.isAdmin(req.user) || L.has(req.user, 'franqueadora');
+app.put('/api/laudos/:id/rt-review', need('franqueadora', 'admin'), (req, res) => {
   const l = getLaudo(req, +req.params.id);
   if (!isRtOf(req, l) || l.status !== 'revisao_tecnica') throw err(403, 'A revisão técnica não está aberta para você.');
   const data = J(l.data, {});
@@ -1066,7 +1025,7 @@ app.put('/api/laudos/:id/rt-review', need('rt', 'admin'), (req, res) => {
   SV.audit(req, 'rt.revisao_salvar', { laudoId: l.id, after: { acessibilidade: !!req.body.acessibilidade, chars: (req.body.descricao || '').length } });
   res.json(laudoPayload(req, one('SELECT * FROM laudos WHERE id=?', l.id)));
 });
-app.post('/api/laudos/:id/rt-return', need('rt', 'admin'), (req, res) => {
+app.post('/api/laudos/:id/rt-return', need('franqueadora', 'admin'), (req, res) => {
   const l = getLaudo(req, +req.params.id);
   if (!isRtOf(req, l) || l.status !== 'revisao_tecnica') throw err(403, 'A revisão técnica não está aberta para você.');
   const items = req.body.items || [];
@@ -1079,7 +1038,7 @@ app.post('/api/laudos/:id/rt-return', need('rt', 'admin'), (req, res) => {
   if (fr) SV.notify({ channel: 'whatsapp', to: fr.phone || fr.email, toName: fr.name, subject: `Laudo ${l.code}: correções pedidas pelo engenheiro`, body: items.map((i) => `• ${C.ITEM[i.item].short}: ${i.reason}${i.comment ? ' — ' + i.comment : ''}`).join('\n'), brandId: store.brand_id, storeId: store.id, laudoId: l.id, kind: 'devolucao' });
   res.json(laudoPayload(req, one('SELECT * FROM laudos WHERE id=?', l.id)));
 });
-app.post('/api/laudos/:id/rt-conclude', need('rt', 'admin'), async (req, res) => {
+app.post('/api/laudos/:id/rt-conclude', need('franqueadora', 'admin'), async (req, res) => {
   const l = getLaudo(req, +req.params.id);
   if (!isRtOf(req, l) || l.status !== 'revisao_tecnica') throw err(403, 'A revisão técnica não está aberta para você.');
   const data = J(l.data, {});
@@ -1099,7 +1058,7 @@ function notifySigners(req, laudoId) {
   const rt = l.rt_id ? one('SELECT r.*, u.token FROM rts r LEFT JOIN users u ON u.id=r.user_id WHERE r.id=?', l.rt_id) : null;
   const fr = one("SELECT u.* FROM store_users su JOIN users u ON u.id=su.user_id WHERE su.store_id=? AND su.kind='loja'", l.store_id);
   const howTo = '\nComo assinar: 1) baixe o PDF; 2) acesse assinador.iti.br e entre com sua conta gov.br (prata ou ouro); 3) assine SEM abrir e salvar o arquivo em outro programa; 4) devolva o PDF assinado no botão "Enviar PDF assinado".';
-  if (rt) SV.notify({ channel: 'email', to: rt.email || rt.phone, toName: rt.name, subject: `Anexo II do laudo ${l.code} liberado para assinatura`, body: `O laudo está 100% validado. Assine o Anexo II pelo gov.br.${howTo}\n${baseUrl(req)}/a/${rt.token}`, brandId: store.brand_id, storeId: store.id, laudoId, kind: 'assinatura' });
+  if (false) SV.notify({ channel: 'email', to: rt.email || rt.phone, toName: rt.name, subject: `Anexo II do laudo ${l.code} liberado para assinatura`, body: `O laudo está 100% validado. Assine o Anexo II pelo gov.br.${howTo}\n${baseUrl(req)}/a/${rt.token}`, brandId: store.brand_id, storeId: store.id, laudoId, kind: 'assinatura' });
   if (fr) SV.notify({ channel: 'whatsapp', to: fr.phone || fr.email, toName: fr.name, subject: `Anexo III do laudo ${l.code} liberado para assinatura`, body: `Seu laudo está 100% validado! Assine o Anexo III pelo gov.br (ou envie a via com firma reconhecida).${howTo}\n${linkFor(req, fr)}`, brandId: store.brand_id, storeId: store.id, laudoId, kind: 'assinatura' });
 }
 
@@ -1146,8 +1105,7 @@ async function acceptSigned(req, l, docKey, buf, method, originalName) {
 app.post('/api/laudos/:id/signed/:doc', need(), upload.single('file'), async (req, res) => {
   const l = getLaudo(req, +req.params.id);
   const isRt = isRtOf(req, l), isLoja = L.storeRole(req.user, l.store_id) === 'loja';
-  if (req.params.doc === 'a2' && !isRt) throw err(403, 'O Anexo II é assinado e devolvido pelo responsável técnico.');
-  if (req.params.doc === 'a3' && !isLoja && !L.isAdmin(req.user)) throw err(403, 'O Anexo III é assinado e devolvido pelo representante legal.');
+  if (!isRt && !isLoja) throw err(403, 'Somente a loja ou a franqueadora enviam o documento assinado.');
   if (!req.file) throw err(400, 'Envie o PDF assinado.');
   const r = await acceptSigned(req, l, req.params.doc, req.file.buffer, req.body.method === 'firma' ? 'firma' : 'govbr', req.file.originalname);
   res.json({ ok: true, checks: r.checks, payload: laudoPayload(req, one('SELECT * FROM laudos WHERE id=?', l.id)) });
@@ -1417,7 +1375,7 @@ app.get('/api/users', need('admin', 'franqueadora'), (req, res) => {
 app.post('/api/users', need('admin'), (req, res) => {
   const b = req.body;
   if (!b.name || !(b.email || b.phone)) throw err(400, 'Informe nome e e-mail ou WhatsApp.');
-  const roles = (b.roles || []).filter((r) => ['admin', 'franqueadora', 'coordenador', 'rt', 'loja', 'colaborador', 'diretoria'].includes(r));
+  const roles = (b.roles || []).filter((r) => ['admin', 'franqueadora', 'loja'].includes(r));
   const id = insert('users', { name: b.name, email: b.email, phone: b.phone, roles: S(roles), scope: S(b.scope || {}), token: token(), password_hash: roles.includes('admin') && b.password ? hashPw(b.password) : null, active: 1, created_at: now(), invited_by: req.user.id });
   SV.audit(req, 'usuario.criar', { entity: 'user', entityId: id, after: { ...b, password: b.password ? '***' : undefined } });
   res.json({ id, link: roles.includes('admin') ? null : `${baseUrl(req)}/a/${one('SELECT token FROM users WHERE id=?', id).token}` });
@@ -1470,6 +1428,7 @@ app.post('/api/admin/trash/:id/restore', need('admin'), (req, res) => {
     const occ = one('SELECT id FROM photos WHERE item=? AND slot=? AND deleted_at IS NULL AND COALESCE(laudo_id,0)=COALESCE(?,0)', p.item, p.slot, p.laudo_id);
     if (occ && p.slot !== 'extra') update('photos', t.entity_id, { deleted_at: null, slot: 'extra', essential: 0 }); else update(table, t.entity_id, { deleted_at: null });
   } else update(table, t.entity_id, { deleted_at: null });
+  if (t.entity === 'store') for (const u of all("SELECT user_id FROM store_users WHERE store_id=?", t.entity_id)) update('users', u.user_id, { active: 1 });
   update('trash', t.id, { restored_at: now() });
   SV.audit(req, 'lixeira.restaurar', { entity: t.entity, entityId: t.entity_id, after: { label: t.label } });
   res.json({ ok: true });
@@ -1643,7 +1602,7 @@ setInterval(runJobs, 6 * 3600 * 1000).unref();
 
 // ---------------- Front-end ----------------
 app.use(express.static(path.join(__dirname, '..', 'public'), { index: false, maxAge: 0 }));
-app.get('/manifest.webmanifest', (req, res) => res.json({ name: 'Laudo ECV', short_name: 'Laudo ECV', start_url: '/', display: 'standalone', background_color: '#0B1430', theme_color: '#0B1430', icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }] }));
+app.get('/manifest.webmanifest', (req, res) => res.json({ name: 'Projeto Técnico DETRAN MG', short_name: 'Projeto Técnico', start_url: '/', display: 'standalone', background_color: '#0B1430', theme_color: '#0B1430', icons: [{ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }] }));
 app.get(['/', '/c/:code'], (req, res) => res.sendFile(path.join(__dirname, '..', 'public', 'index.html')));
 
 app.use((e, req, res, next) => {
@@ -1654,7 +1613,7 @@ app.use((e, req, res, next) => {
 
 if (require.main === module) {
   require('./seed').ensureSeed().then(() => {
-    app.listen(PORT, () => { console.log(`Laudo ECV rodando em http://localhost:${PORT}  (modo demonstração: ${DEMO ? 'sim' : 'não'})`); runJobs(); });
+    app.listen(PORT, () => { console.log(`Projeto Técnico DETRAN MG rodando em http://localhost:${PORT}  (modo demonstração: ${DEMO ? 'sim' : 'não'})`); runJobs(); });
   });
 }
 module.exports = { app, runJobs };

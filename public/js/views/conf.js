@@ -1,4 +1,4 @@
-// Conferência do coordenador (B.19, B.20) e revisão do responsável técnico (B.22).
+// Validação pela franqueadora (B.19, B.20) e revisão técnica (B.22), também feita pela franqueadora.
 import { S, html, get, post, put, api, toast, showErr, modal, confirmBox, lightbox, annSvg, fmtDate, fmtDT, fmtMB, statusPill, brandPill, bar, has, readForm, esc } from '../core.js';
 import { pickFiles } from '../upload.js';
 
@@ -12,15 +12,14 @@ export async function queue(kind) {
   const q = new URLSearchParams(location.hash.split('?')[1] || '');
   const list = await get('/api/queue?' + new URLSearchParams({ ...(st ? { status: st } : {}), ...(q.get('mine') ? { mine: 1 } : {}) }));
   return {
-    title: kind === 'devolvidos' ? 'Laudos devolvidos' : kind === 'aprovados' ? 'Laudos aprovados' : 'Fila de conferência',
-    body: html`<div class="row" style="margin-bottom:12px"><label class="check"><input type="checkbox" id="mine" ${q.get('mine') ? 'checked' : ''}> Só os atribuídos a mim</label><span class="spacer"></span><span class="small muted">Do mais antigo para o mais novo.</span></div>
+    title: kind === 'devolvidos' ? 'Devolvidos à loja' : kind === 'aprovados' ? 'Laudos validados' : 'Fila de validação',
+    body: html`<div class="row" style="margin-bottom:12px"><span class="spacer"></span><span class="small muted">Do mais antigo para o mais novo.</span></div>
     <div class="card pad0"><div class="tablewrap"><table class="t resp"><thead><tr><th>Loja</th><th>Marca</th><th>Laudo</th><th>Situação</th><th>Enviado em</th><th>Prazo</th><th>Validação</th><th></th></tr></thead><tbody>
     ${list.length ? list.map((l) => html`<tr class="click" data-id="${l.id}"><td data-l="Loja"><b>${l.store.fantasia}</b><div class="small muted">${l.store.municipio}</div></td><td data-l="Marca">${brandPill(l.store.brand, l.store.brand_slug)}</td>
       <td data-l="Laudo">${l.code} · v${l.version}${l.isResubmission ? html` <span class="pill info">reenvio${l.corrected ? ` · ${l.corrected} corrigido(s)` : ''}</span>` : ''}</td><td data-l="Situação">${statusPill(l.status, l.statusLabel)}</td><td data-l="Enviado">${fmtDT(l.submitted_at)}</td><td data-l="Prazo">${fmtDate(l.deadline)}</td>
-      <td data-l="Validação">${l.alerts ? html`<span class="pill warn">${l.alerts} alerta(s)</span>` : html`<span class="pill ok">sem alertas</span>`}</td><td><a class="btn sm primary" href="#/${kind ? 'laudo' : 'conferencia'}/${l.id}">${kind ? 'Abrir' : 'Conferir'}</a></td></tr>`) : html`<tr><td colspan="8" class="empty-state">Nada na fila.</td></tr>`}
+      <td data-l="Validação">${l.alerts ? html`<span class="pill warn">${l.alerts} alerta(s)</span>` : html`<span class="pill ok">sem alertas</span>`}</td><td><a class="btn sm primary" href="#/${kind ? 'laudo' : l.status === 'revisao_tecnica' ? 'revisao' : 'conferencia'}/${l.id}">${kind ? 'Abrir' : l.status === 'revisao_tecnica' ? 'Revisão técnica' : 'Validar'}</a></td></tr>`) : html`<tr><td colspan="8" class="empty-state">Nada na fila.</td></tr>`}
     </tbody></table></div></div>`,
     mount(root) {
-      root.querySelector('#mine').onchange = (e) => (location.hash = `#/fila${kind ? '/' + kind : ''}${e.target.checked ? '?mine=1' : ''}`);
       root.querySelectorAll('tr[data-id]').forEach((r) => (r.ondblclick = () => (location.hash = `#/${kind ? 'laudo' : 'conferencia'}/${r.dataset.id}`)));
     },
   };
@@ -60,9 +59,9 @@ export async function review(id) {
   const eqs = it.eqType ? d.equipment.filter((e) => e.type === it.eqType) : [];
   const can = d.perms.review;
   return {
-    title: `Conferência · ${d.store.fantasia} · ${S.cat.PROCESS_TYPES[d.laudo.process_type]}`,
+    title: `Validação · ${d.store.fantasia} · ${S.cat.PROCESS_TYPES[d.laudo.process_type]}`,
     body: html`<div class="row" style="margin-bottom:10px">${statusPill(d.laudo.status, d.laudo.statusLabel)}<span class="small muted">${d.laudo.code} · v${d.laudo.version} · ${d.porte ? S.cat.PORTE_LABEL[d.porte] + ' porte' : ''} · ${d.data.etapa1?.boxesLeves || 0} leves${d.data.etapa1?.pesados ? ' + ' + d.data.etapa1.boxesPesados + ' pesado(s)' : ''}</span><span class="spacer"></span>
-      <a class="btn sm" target="_blank" href="/api/laudos/${id}/preview/a2">Prévia Anexo II</a><a class="btn sm" target="_blank" href="/api/laudos/${id}/preview/a3">Prévia Anexo III</a>${can ? html`<button class="btn sm primary" id="finish">Concluir conferência</button>` : ''}</div>
+      <a class="btn sm" target="_blank" href="/api/laudos/${id}/preview/a2">Prévia Anexo II</a><a class="btn sm" target="_blank" href="/api/laudos/${id}/preview/a3">Prévia Anexo III</a>${can ? html`<button class="btn sm primary" id="finish">Concluir validação</button>` : ''}</div>
     ${d.diff && Object.keys(d.diff.changes).length ? html`<div class="note info" style="margin-bottom:10px">Reenvio: ${Object.keys(d.diff.changes).length} item(ns) mudaram em relação à v${d.diff.from}: ${Object.keys(d.diff.changes).map((k) => ITEM(k)?.short).join(', ')}.</div>` : ''}
     <div class="grid" style="grid-template-columns:250px minmax(0,1fr);align-items:start" id="cgrid">
       <div class="card pad0" style="position:sticky;top:70px">
@@ -113,8 +112,8 @@ export async function review(id) {
         actions: [{ label: 'Cancelar' }, { label: 'Aceitar', cls: 'primary', onClick: async (m) => { await post(`/api/laudos/${id}/alerts/${encodeURIComponent(b.dataset.accept)}/accept`, { just: m.querySelector('#j').value }); toast('Alerta aceito.', 'ok'); import('../app.js').then((x) => x.render()); } }] })));
       const f = root.querySelector('#finish'); if (f) f.onclick = async () => {
         const dev = Object.values(d.reviews).filter((x) => x.status === 'devolvido').length;
-        if (!(await confirmBox('Concluir conferência', dev ? `${dev} item(ns) devolvido(s): a loja recebe a lista de pendências por WhatsApp/e-mail com link direto para cada item.` : 'Todos os itens aprovados: o laudo segue para a revisão do responsável técnico.', 'Concluir'))) return;
-        try { await post(`/api/laudos/${id}/finish-review`); toast('Conferência concluída.', 'ok'); location.hash = '#/fila'; } catch (e) { showErr(e); }
+        if (!(await confirmBox('Concluir validação', dev ? `${dev} item(ns) devolvido(s): os itens ficam abertos para a loja corrigir, com o motivo, na área dela. Avise a loja pelo link dela.` : 'Todos os itens aprovados: o laudo segue para a revisão técnica (descrição, acessibilidade e ART/RRT).', 'Concluir'))) return;
+        try { const r = await post(`/api/laudos/${id}/finish-review`); toast('Validação concluída.', 'ok'); location.hash = r.laudo.status === 'revisao_tecnica' ? `#/revisao/${id}` : '#/fila'; } catch (e) { showErr(e); }
       };
       const vr = root.querySelector('#valRt'); if (vr) vr.onclick = () => modal({ title: 'Validar registro do RT', body: html`<p>Confira <b>${d.rt.name}</b> · ${d.rt.council} <b>${d.rt.reg_number}</b> na consulta pública do ${d.rt.council === 'CAU' ? 'CAU' : 'CREA-MG'} e registre a validação.</p><input id="n" placeholder="Observação (ex.: registro ativo, consultado em…)">`,
         actions: [{ label: 'Cancelar' }, { label: 'Marcar como validado', cls: 'ok', onClick: async (m) => { await post(`/api/rts/${d.rt.id}/validate`, { note: m.querySelector('#n').value }); toast('RT validado.', 'ok'); import('../app.js').then((x) => x.render()); } }] });
@@ -140,17 +139,17 @@ export async function rtReview(id) {
   return {
     title: `Revisão técnica · ${d.store.fantasia}`,
     body: html`<div class="row" style="margin-bottom:10px">${statusPill(d.laudo.status, d.laudo.statusLabel)}<span class="small muted">${d.laudo.code} · ${d.porte ? S.cat.PORTE_LABEL[d.porte] + ' porte' : ''}</span><span class="spacer"></span><a class="btn sm" target="_blank" href="/api/laudos/${id}/preview/a2">Prévia do Anexo II</a>${['liberado_assinatura', 'pronto_protocolo', 'protocolado'].includes(d.laudo.status) ? html`<a class="btn sm primary" href="#/laudo/${id}/assinatura" id="goSign">Assinar Anexo II</a>` : ''}</div>
-    ${!can && d.laudo.status !== 'liberado_assinatura' ? html`<div class="note" style="margin-bottom:12px">${['aguardando_conferencia', 'em_conferencia', 'em_preenchimento', 'devolvido'].includes(d.laudo.status) ? 'Você recebe o laudo para revisão depois da aprovação do coordenador.' : 'Revisão técnica concluída.'}</div>` : ''}
+    ${!can && d.laudo.status !== 'liberado_assinatura' ? html`<div class="note" style="margin-bottom:12px">${['aguardando_conferencia', 'em_conferencia', 'em_preenchimento', 'devolvido'].includes(d.laudo.status) ? 'A revisão técnica fica disponível depois que todos os itens forem validados.' : 'Revisão técnica concluída.'}</div>` : ''}
     <div class="split"><div>
       <div class="card"><h3>Descrição técnica das instalações e dimensionamentos</h3>
         <textarea id="desc" rows="12" ${can ? '' : 'disabled'} placeholder="Use o texto-base com as medidas declaradas e complete.">${rv.descricao || ''}</textarea>
         ${can ? html`<div class="row" style="margin-top:8px"><button class="btn sm" id="base">Inserir texto-base com as medidas declaradas</button><span class="small muted" id="saved"></span></div>` : ''}</div>
       <div class="card"><h3>Declaração de acessibilidade (obrigatória)</h3><p class="small">Declaro que as instalações atendem à ABNT NBR 9050:2020, à Lei nº 13.146/2015, à Lei nº 10.048/2000, à Lei nº 10.098/2000 e à Convenção Internacional sobre os Direitos das Pessoas com Deficiência (art. 34 §16, "a").</p>
         <label class="check"><input type="checkbox" id="acc" ${rv.acessibilidade ? 'checked' : ''} ${can ? '' : 'disabled'}> Confirmo a declaração de acessibilidade</label></div>
-      <div class="card"><h3>Itens conferidos pelo coordenador</h3>${d.scope.map((k) => html`<div class="list-item"><span class="dot ${d.reviews[k]?.status === 'aprovado' ? 'ok' : d.reviews[k]?.status === 'devolvido' ? 'err' : ''}"></span><span style="flex:1">${ITEM(k).annex} · ${ITEM(k).n}. ${ITEM(k).title}</span>${can ? html`<label class="check small"><input type="checkbox" class="dev" value="${k}"> devolver</label>` : ''}</div>`)}
+      <div class="card"><h3>Itens validados</h3>${d.scope.map((k) => html`<div class="list-item"><span class="dot ${d.reviews[k]?.status === 'aprovado' ? 'ok' : d.reviews[k]?.status === 'devolvido' ? 'err' : ''}"></span><span style="flex:1">${ITEM(k).annex} · ${ITEM(k).n}. ${ITEM(k).title}</span>${can ? html`<label class="check small"><input type="checkbox" class="dev" value="${k}"> devolver</label>` : ''}</div>`)}
         ${can ? html`<div class="row" style="margin-top:8px"><select id="rr" style="max-width:280px"><option value="">Motivo</option>${S.cat.returnReasons.map((r) => html`<option>${r}</option>`)}</select><input id="rc" placeholder="Comentário" style="max-width:300px"><button class="btn danger" id="ret">Devolver itens marcados à loja</button></div>` : ''}</div>
     </div><div>
-      <div class="card"><h3>ART / RRT</h3>${art ? html`<p class="small">📄 <a href="${art.url}" target="_blank">${art.name}</a> · ano ${art.meta.ano} · nº ${art.meta.numero || '—'}</p>${+art.meta.ano !== ano ? html`<div class="note err small">A ART/RRT precisa ser de ${ano} (ano do pedido).</div>` : html`<div class="note ok small">✓ Emitida no ano do pedido (${ano}).</div>`}${art.meta.aviso ? html`<div class="note warn small" style="margin-top:6px">${art.meta.aviso}</div>` : ''}` : html`<p class="small muted">Não anexada.</p>`}
+      <div class="card"><h3>ART / RRT do responsável técnico</h3>${art ? html`<p class="small">📄 <a href="${art.url}" target="_blank">${art.name}</a> · ano ${art.meta.ano} · nº ${art.meta.numero || '—'}</p>${+art.meta.ano !== ano ? html`<div class="note err small">A ART/RRT precisa ser de ${ano} (ano do pedido).</div>` : html`<div class="note ok small">✓ Emitida no ano do pedido (${ano}).</div>`}${art.meta.aviso ? html`<div class="note warn small" style="margin-top:6px">${art.meta.aviso}</div>` : ''}` : html`<p class="small muted">Não anexada.</p>`}
         ${can ? html`<form id="af" class="stack" style="margin-top:8px"><div class="grid g2"><div><label class="f">Ano de emissão</label><input name="ano" value="${ano}" required></div><div><label class="f">Nº da ART/RRT</label><input name="numero"></div></div><div><label class="f">Registro CREA/CAU na ART</label><input name="registro" value="${d.rt?.reg_number || ''}"></div><button class="btn">Anexar ART/RRT (PDF)</button></form>` : ''}</div>
       ${can ? html`<div class="card"><button class="btn primary block lg" id="conclude">Concluir revisão técnica</button><p class="small muted">Se tudo estiver 100% validado, o sistema gera e trava os PDFs finais e libera a assinatura gov.br.</p><div id="conds"></div></div>` : ''}
     </div></div>`,
@@ -167,7 +166,7 @@ export async function rtReview(id) {
       const ret = root.querySelector('#ret'); if (ret) ret.onclick = async () => {
         const items = [...root.querySelectorAll('.dev:checked')].map((x) => ({ item: x.value, reason: root.querySelector('#rr').value, comment: root.querySelector('#rc').value }));
         if (!items.length) return toast('Marque os itens a devolver.', 'err'); if (!items[0].reason) return toast('Escolha o motivo.', 'err');
-        try { await post(`/api/laudos/${id}/rt-return`, { items }); toast('Itens devolvidos à loja.', 'ok'); location.hash = '#/rt'; } catch (e) { showErr(e); }
+        try { await post(`/api/laudos/${id}/rt-return`, { items }); toast('Itens devolvidos à loja.', 'ok'); location.hash = '#/fila'; } catch (e) { showErr(e); }
       };
       const c = root.querySelector('#conclude'); if (c) c.onclick = async () => {
         await save(); c.disabled = true; c.textContent = 'Validando e gerando PDFs…';

@@ -1,0 +1,22 @@
+{
+  "name": "laudo-ecv",
+  "version": "2.1.0",
+  "description": "Sistema de Laudo Técnico ECV — Anexos II e III (Portaria CET-MG nº 01524/2025). Desenvolvido por Domma Tecnologia.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "reset": "rm -rf storage && node server/index.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.3.0",
+    "multer": "^2.5.0",
+    "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.35.5"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.5"
+  }
+}

@@ -159,6 +159,6 @@ export function about() {
     title: 'Sobre o sistema', narrow: true,
     body: html`<div class="card"><h2>Projeto Técnico DETRAN MG</h2><p>Versão 2.1 · sistema web (navegador), sem app de loja. No celular, use "Adicionar à tela inicial" para criar um atalho.</p>
       <p>Montagem do Laudo Técnico de Infraestrutura (Anexo II) e da Declaração de Requisitos de Equipamentos (Anexo III) para as ECVs das redes Auto Visão e Royal em Minas Gerais, conforme a Portaria CET-MG nº 01524/2025 (altera a Portaria CET-MG nº 1.290/2023).</p>
-      <hr><p class="small muted">Desenvolvido por</p><p><img class="domma-logo lg" src="/brand/domma/logo-fundo-claro.svg" alt="Domma Tecnologia"></p><p class="small">Suporte: suporte@domma.com.br</p></div>`,
+      <hr><p class="small muted">Desenvolvido por</p><p><img class="domma-logo lg" src="/brand/domma/logo-fundo-claro.png" alt="Domma Tecnologia"></p><p class="small">Suporte: suporte@domma.com.br</p></div>`,
   };
 }

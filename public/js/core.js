@@ -155,5 +155,5 @@ export function brandBar(brand, ctx, menu) {
 }
 
 // Logotipo oficial Domma Tecnologia (Design System Domma): versão para fundo escuro e para fundo claro
-export const DOMMA = raw('<img class="domma-logo" src="/brand/domma/logo-fundo-escuro.svg" alt="Domma Tecnologia">');
-export const DOMMA_LIGHT = raw('<img class="domma-logo" src="/brand/domma/logo-fundo-claro.svg" alt="Domma Tecnologia">');
+export const DOMMA = raw('<img class="domma-logo" src="/brand/domma/logo-fundo-escuro.png" alt="Domma Tecnologia">');
+export const DOMMA_LIGHT = raw('<img class="domma-logo" src="/brand/domma/logo-fundo-claro.png" alt="Domma Tecnologia">');
